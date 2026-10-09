@@ -11,7 +11,7 @@ from app.models import (
     UpdateItemDTO,
     User,
 )
-from app.store import InMemoryStore, get_store
+from app.store import DatabaseStore, get_store
 
 router = APIRouter()
 
@@ -22,7 +22,7 @@ async def list_items(
     type: Optional[LifecycleType] = Query(None, description="Filter by lifecycle type"),
     searchQuery: Optional[str] = Query(None, description="Search query string"),
     current_user: User = Depends(get_current_user_optional),
-    store: InMemoryStore = Depends(get_store),
+    store: DatabaseStore = Depends(get_store),
 ) -> List[LifecycleItem]:
     return store.get_items(
         user=current_user,
@@ -36,7 +36,7 @@ async def list_items(
 async def create_item(
     payload: CreateItemDTO,
     current_user: User = Depends(get_current_user_optional),
-    store: InMemoryStore = Depends(get_store),
+    store: DatabaseStore = Depends(get_store),
 ) -> LifecycleItem:
     try:
         return store.create_item(user=current_user, data=payload)
@@ -50,7 +50,7 @@ async def create_item(
 @router.get("/{id}", response_model=LifecycleItem, status_code=status.HTTP_200_OK)
 async def get_item(
     id: str,
-    store: InMemoryStore = Depends(get_store),
+    store: DatabaseStore = Depends(get_store),
 ) -> LifecycleItem:
     item = store.get_item_by_id(id)
     if not item:
@@ -66,7 +66,7 @@ async def update_item(
     id: str,
     payload: UpdateItemDTO,
     current_user: User = Depends(get_current_user_optional),
-    store: InMemoryStore = Depends(get_store),
+    store: DatabaseStore = Depends(get_store),
 ) -> LifecycleItem:
     item = store.get_item_by_id(id)
     if not item:
@@ -87,7 +87,7 @@ async def update_item(
 async def delete_item(
     id: str,
     current_user: User = Depends(get_current_user_optional),
-    store: InMemoryStore = Depends(get_store),
+    store: DatabaseStore = Depends(get_store),
 ) -> Response:
     item = store.get_item_by_id(id)
     if not item:
@@ -107,7 +107,7 @@ async def delete_item(
 @router.post("/{id}/complete", response_model=LifecycleItem, status_code=status.HTTP_200_OK)
 async def toggle_complete(
     id: str,
-    store: InMemoryStore = Depends(get_store),
+    store: DatabaseStore = Depends(get_store),
 ) -> LifecycleItem:
     updated = store.toggle_item_completion(id)
     if not updated:

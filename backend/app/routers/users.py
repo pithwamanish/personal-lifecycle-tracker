@@ -4,14 +4,14 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.models import User
-from app.store import InMemoryStore, get_store
+from app.store import DatabaseStore, get_store
 
 router = APIRouter()
 
 
 @router.get("", response_model=List[User], status_code=status.HTTP_200_OK)
 async def list_users(
-    store: InMemoryStore = Depends(get_store),
+    store: DatabaseStore = Depends(get_store),
 ) -> List[User]:
     return store.list_users()
 
@@ -19,7 +19,7 @@ async def list_users(
 @router.delete("/{userId}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     userId: str,
-    store: InMemoryStore = Depends(get_store),
+    store: DatabaseStore = Depends(get_store),
 ) -> Response:
     deleted = store.delete_user(userId)
     if not deleted:

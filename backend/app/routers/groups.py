@@ -11,7 +11,7 @@ from app.models import (
     MessageResponse,
     User,
 )
-from app.store import InMemoryStore, get_store
+from app.store import DatabaseStore, get_store
 
 router = APIRouter()
 
@@ -19,7 +19,7 @@ router = APIRouter()
 @router.get("", response_model=List[Group], status_code=status.HTTP_200_OK)
 async def list_groups(
     current_user: User = Depends(get_current_user_optional),
-    store: InMemoryStore = Depends(get_store),
+    store: DatabaseStore = Depends(get_store),
 ) -> List[Group]:
     return store.get_groups(user=current_user)
 
@@ -28,7 +28,7 @@ async def list_groups(
 async def create_group(
     payload: CreateGroupRequest,
     current_user: User = Depends(get_current_user_optional),
-    store: InMemoryStore = Depends(get_store),
+    store: DatabaseStore = Depends(get_store),
 ) -> Group:
     return store.create_group(user=current_user, name=payload.name)
 
@@ -36,7 +36,7 @@ async def create_group(
 @router.get("/{id}", response_model=Group, status_code=status.HTTP_200_OK)
 async def get_group(
     id: str,
-    store: InMemoryStore = Depends(get_store),
+    store: DatabaseStore = Depends(get_store),
 ) -> Group:
     group = store.get_group_by_id(id)
     if not group:
@@ -51,7 +51,7 @@ async def get_group(
 async def delete_group(
     id: str,
     current_user: User = Depends(get_current_user_optional),
-    store: InMemoryStore = Depends(get_store),
+    store: DatabaseStore = Depends(get_store),
 ) -> Response:
     group = store.get_group_by_id(id)
     if not group:
@@ -73,7 +73,7 @@ async def add_member(
     groupId: str,
     payload: AddMemberRequest,
     current_user: User = Depends(get_current_user_optional),
-    store: InMemoryStore = Depends(get_store),
+    store: DatabaseStore = Depends(get_store),
 ) -> Group:
     group = store.get_group_by_id(groupId)
     if not group:
@@ -97,7 +97,7 @@ async def remove_member(
     groupId: str,
     memberEmail: str,
     current_user: User = Depends(get_current_user_optional),
-    store: InMemoryStore = Depends(get_store),
+    store: DatabaseStore = Depends(get_store),
 ) -> Group:
     group = store.get_group_by_id(groupId)
     if not group:
@@ -120,7 +120,7 @@ async def remove_member(
 async def leave_group(
     groupId: str,
     current_user: User = Depends(get_current_user_optional),
-    store: InMemoryStore = Depends(get_store),
+    store: DatabaseStore = Depends(get_store),
 ) -> MessageResponse:
     group = store.get_group_by_id(groupId)
     if not group:

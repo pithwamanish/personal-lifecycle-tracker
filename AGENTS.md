@@ -152,6 +152,9 @@ PROD_PORT=8088
 APP_ENV=development
 PYTHONUNBUFFERED=1
 
+# Database connection (SQLite default, or PostgreSQL e.g. postgresql://user:pass@host:5432/db)
+DATABASE_URL=sqlite:///./lifecycle.db
+
 # Frontend API routing
 VITE_API_URL=http://localhost:8003
 VITE_BACKEND_URL=http://backend:8000

@@ -15,7 +15,7 @@ from app.models import (
     SignupRequest,
     User,
 )
-from app.store import InMemoryStore, get_store
+from app.store import DatabaseStore, get_store
 
 router = APIRouter()
 
@@ -23,7 +23,7 @@ router = APIRouter()
 @router.post("/signup", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def signup(
     payload: SignupRequest,
-    store: InMemoryStore = Depends(get_store),
+    store: DatabaseStore = Depends(get_store),
 ) -> AuthResponse:
     existing = store.get_user_by_email(payload.email)
     if existing:
@@ -51,7 +51,7 @@ async def signup(
 @router.post("/login", response_model=AuthResponse, status_code=status.HTTP_200_OK)
 async def login(
     payload: LoginRequest,
-    store: InMemoryStore = Depends(get_store),
+    store: DatabaseStore = Depends(get_store),
 ) -> AuthResponse:
     user_db = store.get_user_by_email(payload.email)
     if not user_db or not verify_password(payload.password, user_db.hashed_password):

@@ -1,11 +1,32 @@
 from __future__ import annotations
 
+import json
+import os
 import threading
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Generator, List, Optional, Tuple
+
+from sqlalchemy import and_, func, or_
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.auth import hash_password
+from app.database import (
+    check_db_health,
+    create_engine_for_url,
+    get_database_url,
+    init_db,
+)
+from app.db_models import (
+    DailyDigestConfigModel,
+    DailyDigestHistoryModel,
+    GroupMemberModel,
+    GroupModel,
+    LifecycleItemModel,
+    UserModel,
+)
 from app.models import (
     CreateItemDTO,
     DailyDigestConfig,
@@ -101,295 +122,340 @@ def get_relative_due_date_label(
     return f"Due in {diff} days"
 
 
-class InMemoryStore:
-    def __init__(self) -> None:
+class DatabaseStore:
+    """
+    Database-agnostic persistent store powered by SQLAlchemy.
+    Configured via environment variable (DATABASE_URL / DB_URL), supporting
+    SQLite by default as well as PostgreSQL and other SQL backends.
+    """
+
+    def __init__(self, database_url: Optional[str] = None) -> None:
+        self.database_url = database_url or get_database_url()
+        self.engine: Engine = create_engine_for_url(self.database_url)
+        self.session_factory = sessionmaker(
+            autocommit=False,
+            autoflush=False,
+            expire_on_commit=False,
+            bind=self.engine,
+        )
         self._lock = threading.Lock()
-        self.users: Dict[str, UserInDB] = {}
-        self.groups: Dict[str, Group] = {}
-        self.items: Dict[str, LifecycleItem] = {}
-        self.digest_config: DailyDigestConfig = DailyDigestConfig()
-        self.digest_history: List[DailyDigestEmail] = []
-        self.seed()
+
+        # Initialize schema tables
+        init_db(self.engine)
+
+        # Auto-seed if database is empty on initialization
+        with self.get_session() as session:
+            user_count = session.query(UserModel).count()
+            if user_count == 0:
+                self.seed()
+
+    @contextmanager
+    def get_session(self) -> Generator[Session, None, None]:
+        session: Session = self.session_factory()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def check_health(self) -> bool:
+        return check_db_health(self.engine)
 
     def seed(self) -> None:
-        """Seed the in-memory store with default users, groups, and items."""
-        with self._lock:
-            self.users.clear()
-            self.groups.clear()
-            self.items.clear()
-            self.digest_history.clear()
-            self.digest_config = DailyDigestConfig(
-                timeZone="UTC",
-                deliveryTime=DigestDeliveryTime.TIME_08,
+        """Seed the database with default users, groups, and items."""
+        with self._lock, self.get_session() as session:
+            # Clear all existing tables in reverse dependency order
+            session.query(DailyDigestHistoryModel).delete(synchronize_session=False)
+            session.query(DailyDigestConfigModel).delete(synchronize_session=False)
+            session.query(LifecycleItemModel).delete(synchronize_session=False)
+            session.query(GroupMemberModel).delete(synchronize_session=False)
+            session.query(GroupModel).delete(synchronize_session=False)
+            session.query(UserModel).delete(synchronize_session=False)
+
+            # 1. Seed Digest Config
+            digest_cfg = DailyDigestConfigModel(
+                id=1,
+                time_zone="UTC",
+                delivery_time=DigestDeliveryTime.TIME_08.value,
                 enabled=True,
             )
+            session.add(digest_cfg)
 
-            # Seed Users
+            # 2. Seed Users
             default_password_hash = hash_password("password123")
             users_data = [
-                UserInDB(
+                UserModel(
                     id="user_alex",
                     email="alex@example.com",
                     name="Alex Taylor",
-                    createdAt="2026-01-10T08:00:00Z",
+                    created_at="2026-01-10T08:00:00Z",
                     hashed_password=default_password_hash,
                 ),
-                UserInDB(
+                UserModel(
                     id="user_sarah",
                     email="sarah@example.com",
                     name="Sarah Jenkins",
-                    createdAt="2026-02-14T09:30:00Z",
+                    created_at="2026-02-14T09:30:00Z",
                     hashed_password=default_password_hash,
                 ),
-                UserInDB(
+                UserModel(
                     id="user_jordan",
                     email="jordan@example.com",
                     name="Jordan Patel",
-                    createdAt="2026-03-01T11:15:00Z",
+                    created_at="2026-03-01T11:15:00Z",
                     hashed_password=default_password_hash,
                 ),
             ]
-            for u in users_data:
-                self.users[u.id] = u
+            session.add_all(users_data)
+            session.flush()
 
-            # Seed Groups
-            groups_data = [
-                Group(
-                    id="group_home",
-                    name="Oakridge Family & Home",
-                    ownerId="user_alex",
-                    ownerEmail="alex@example.com",
-                    memberEmails=["alex@example.com", "sarah@example.com"],
-                    createdAt="2026-02-15T10:00:00Z",
-                ),
-                Group(
-                    id="group_vehicles",
-                    name="Shared Vehicle Maintenance",
-                    ownerId="user_sarah",
-                    ownerEmail="sarah@example.com",
-                    memberEmails=["sarah@example.com", "alex@example.com", "jordan@example.com"],
-                    createdAt="2026-02-20T14:00:00Z",
-                ),
+            # 3. Seed Groups & Group Members
+            group_home = GroupModel(
+                id="group_home",
+                name="Oakridge Family & Home",
+                owner_id="user_alex",
+                owner_email="alex@example.com",
+                created_at="2026-02-15T10:00:00Z",
+            )
+            group_vehicles = GroupModel(
+                id="group_vehicles",
+                name="Shared Vehicle Maintenance",
+                owner_id="user_sarah",
+                owner_email="sarah@example.com",
+                created_at="2026-02-20T14:00:00Z",
+            )
+            session.add_all([group_home, group_vehicles])
+            session.flush()
+
+            members_data = [
+                GroupMemberModel(group_id="group_home", email="alex@example.com"),
+                GroupMemberModel(group_id="group_home", email="sarah@example.com"),
+                GroupMemberModel(group_id="group_vehicles", email="sarah@example.com"),
+                GroupMemberModel(group_id="group_vehicles", email="alex@example.com"),
+                GroupMemberModel(group_id="group_vehicles", email="jordan@example.com"),
             ]
-            for g in groups_data:
-                self.groups[g.id] = g
+            session.add_all(members_data)
+            session.flush()
 
-            # Seed Items (12 items matching the frontend seed dataset)
+            # 4. Seed Items (12 items matching the frontend seed dataset)
             seed_items = [
                 # Renewals
-                LifecycleItem(
+                LifecycleItemModel(
                     id="item_1",
                     name="Vehicle Auto Insurance Policy",
-                    lifecycleType=LifecycleType.renewal,
-                    dueDate=get_relative_date_str(-4),  # Overdue
-                    status=ItemStatus.active,
-                    ownerId="user_alex",
-                    ownerEmail="alex@example.com",
-                    groupId="group_vehicles",
-                    groupName="Shared Vehicle Maintenance",
-                    createdAt="2026-08-01T08:00:00Z",
-                    updatedAt="2026-08-01T08:00:00Z",
+                    lifecycle_type=LifecycleType.renewal.value,
+                    due_date=get_relative_date_str(-4),  # Overdue
+                    status=ItemStatus.active.value,
+                    owner_id="user_alex",
+                    owner_email="alex@example.com",
+                    group_id="group_vehicles",
+                    group_name="Shared Vehicle Maintenance",
+                    created_at="2026-08-01T08:00:00Z",
+                    updated_at="2026-08-01T08:00:00Z",
                 ),
-                LifecycleItem(
+                LifecycleItemModel(
                     id="item_2",
                     name="International Passport Renewal",
-                    lifecycleType=LifecycleType.renewal,
-                    dueDate=get_relative_date_str(12),  # Upcoming
-                    status=ItemStatus.active,
-                    ownerId="user_alex",
-                    ownerEmail="alex@example.com",
-                    groupId=None,
-                    groupName=None,
-                    createdAt="2026-08-05T09:00:00Z",
-                    updatedAt="2026-08-05T09:00:00Z",
+                    lifecycle_type=LifecycleType.renewal.value,
+                    due_date=get_relative_date_str(12),  # Upcoming
+                    status=ItemStatus.active.value,
+                    owner_id="user_alex",
+                    owner_email="alex@example.com",
+                    group_id=None,
+                    group_name=None,
+                    created_at="2026-08-05T09:00:00Z",
+                    updated_at="2026-08-05T09:00:00Z",
                 ),
-                LifecycleItem(
+                LifecycleItemModel(
                     id="item_3",
                     name="Residential Homeowners Insurance",
-                    lifecycleType=LifecycleType.renewal,
-                    dueDate=get_relative_date_str(24),  # Upcoming
-                    status=ItemStatus.active,
-                    ownerId="user_alex",
-                    ownerEmail="alex@example.com",
-                    groupId="group_home",
-                    groupName="Oakridge Family & Home",
-                    createdAt="2026-08-10T11:00:00Z",
-                    updatedAt="2026-08-10T11:00:00Z",
+                    lifecycle_type=LifecycleType.renewal.value,
+                    due_date=get_relative_date_str(24),  # Upcoming
+                    status=ItemStatus.active.value,
+                    owner_id="user_alex",
+                    owner_email="alex@example.com",
+                    group_id="group_home",
+                    group_name="Oakridge Family & Home",
+                    created_at="2026-08-10T11:00:00Z",
+                    updated_at="2026-08-10T11:00:00Z",
                 ),
-                LifecycleItem(
+                LifecycleItemModel(
                     id="item_4",
                     name="State Driver License Renewal",
-                    lifecycleType=LifecycleType.renewal,
-                    dueDate=get_relative_date_str(-30),
-                    status=ItemStatus.completed,
-                    ownerId="user_alex",
-                    ownerEmail="alex@example.com",
-                    groupId=None,
-                    groupName=None,
-                    createdAt="2026-07-01T10:00:00Z",
-                    updatedAt="2026-09-01T10:00:00Z",
+                    lifecycle_type=LifecycleType.renewal.value,
+                    due_date=get_relative_date_str(-30),
+                    status=ItemStatus.completed.value,
+                    owner_id="user_alex",
+                    owner_email="alex@example.com",
+                    group_id=None,
+                    group_name=None,
+                    created_at="2026-07-01T10:00:00Z",
+                    updated_at="2026-09-01T10:00:00Z",
                 ),
                 # Maintenance
-                LifecycleItem(
+                LifecycleItemModel(
                     id="item_5",
                     name="HVAC Air Filter & Coil Servicing",
-                    lifecycleType=LifecycleType.maintenance,
-                    dueDate=get_relative_date_str(-2),  # Overdue
-                    status=ItemStatus.active,
-                    ownerId="user_sarah",
-                    ownerEmail="sarah@example.com",
-                    groupId="group_home",
-                    groupName="Oakridge Family & Home",
-                    createdAt="2026-08-15T12:00:00Z",
-                    updatedAt="2026-08-15T12:00:00Z",
+                    lifecycle_type=LifecycleType.maintenance.value,
+                    due_date=get_relative_date_str(-2),  # Overdue
+                    status=ItemStatus.active.value,
+                    owner_id="user_sarah",
+                    owner_email="sarah@example.com",
+                    group_id="group_home",
+                    group_name="Oakridge Family & Home",
+                    created_at="2026-08-15T12:00:00Z",
+                    updated_at="2026-08-15T12:00:00Z",
                 ),
-                LifecycleItem(
+                LifecycleItemModel(
                     id="item_6",
                     name="Honda CR-V Brake Inspection & Tire Rotation",
-                    lifecycleType=LifecycleType.maintenance,
-                    dueDate=get_relative_date_str(9),  # Upcoming
-                    status=ItemStatus.active,
-                    ownerId="user_sarah",
-                    ownerEmail="sarah@example.com",
-                    groupId="group_vehicles",
-                    groupName="Shared Vehicle Maintenance",
-                    createdAt="2026-08-20T14:30:00Z",
-                    updatedAt="2026-08-20T14:30:00Z",
+                    lifecycle_type=LifecycleType.maintenance.value,
+                    due_date=get_relative_date_str(9),  # Upcoming
+                    status=ItemStatus.active.value,
+                    owner_id="user_sarah",
+                    owner_email="sarah@example.com",
+                    group_id="group_vehicles",
+                    group_name="Shared Vehicle Maintenance",
+                    created_at="2026-08-20T14:30:00Z",
+                    updated_at="2026-08-20T14:30:00Z",
                 ),
-                LifecycleItem(
+                LifecycleItemModel(
                     id="item_7",
                     name="Reverse Osmosis Filter Cartridge Replacement",
-                    lifecycleType=LifecycleType.maintenance,
-                    dueDate=None,  # Missing due date allowed
-                    status=ItemStatus.active,
-                    ownerId="user_alex",
-                    ownerEmail="alex@example.com",
-                    groupId="group_home",
-                    groupName="Oakridge Family & Home",
-                    createdAt="2026-09-01T09:00:00Z",
-                    updatedAt="2026-09-01T09:00:00Z",
+                    lifecycle_type=LifecycleType.maintenance.value,
+                    due_date=None,  # Missing due date allowed
+                    status=ItemStatus.active.value,
+                    owner_id="user_alex",
+                    owner_email="alex@example.com",
+                    group_id="group_home",
+                    group_name="Oakridge Family & Home",
+                    created_at="2026-09-01T09:00:00Z",
+                    updated_at="2026-09-01T09:00:00Z",
                 ),
-                LifecycleItem(
+                LifecycleItemModel(
                     id="item_8",
                     name="Annual Water Heater Flush",
-                    lifecycleType=LifecycleType.maintenance,
-                    dueDate=get_relative_date_str(-60),
-                    status=ItemStatus.completed,
-                    ownerId="user_alex",
-                    ownerEmail="alex@example.com",
-                    groupId="group_home",
-                    groupName="Oakridge Family & Home",
-                    createdAt="2026-06-01T08:00:00Z",
-                    updatedAt="2026-07-15T08:00:00Z",
+                    lifecycle_type=LifecycleType.maintenance.value,
+                    due_date=get_relative_date_str(-60),
+                    status=ItemStatus.completed.value,
+                    owner_id="user_alex",
+                    owner_email="alex@example.com",
+                    group_id="group_home",
+                    group_name="Oakridge Family & Home",
+                    created_at="2026-06-01T08:00:00Z",
+                    updated_at="2026-07-15T08:00:00Z",
                 ),
                 # Warranties
-                LifecycleItem(
+                LifecycleItemModel(
                     id="item_9",
                     name="MacBook Pro AppleCare+ Protection",
-                    lifecycleType=LifecycleType.warranty,
-                    dueDate=get_relative_date_str(5),  # Upcoming
-                    status=ItemStatus.active,
-                    ownerId="user_alex",
-                    ownerEmail="alex@example.com",
-                    groupId=None,
-                    groupName=None,
-                    createdAt="2026-08-25T15:00:00Z",
-                    updatedAt="2026-08-25T15:00:00Z",
+                    lifecycle_type=LifecycleType.warranty.value,
+                    due_date=get_relative_date_str(5),  # Upcoming
+                    status=ItemStatus.active.value,
+                    owner_id="user_alex",
+                    owner_email="alex@example.com",
+                    group_id=None,
+                    group_name=None,
+                    created_at="2026-08-25T15:00:00Z",
+                    updated_at="2026-08-25T15:00:00Z",
                 ),
-                LifecycleItem(
+                LifecycleItemModel(
                     id="item_10",
                     name='Samsung 65" OLED TV 3-Year Limited Warranty',
-                    lifecycleType=LifecycleType.warranty,
-                    dueDate=get_relative_date_str(-10),  # Overdue
-                    status=ItemStatus.active,
-                    ownerId="user_alex",
-                    ownerEmail="alex@example.com",
-                    groupId="group_home",
-                    groupName="Oakridge Family & Home",
-                    createdAt="2026-07-10T16:00:00Z",
-                    updatedAt="2026-07-10T16:00:00Z",
+                    lifecycle_type=LifecycleType.warranty.value,
+                    due_date=get_relative_date_str(-10),  # Overdue
+                    status=ItemStatus.active.value,
+                    owner_id="user_alex",
+                    owner_email="alex@example.com",
+                    group_id="group_home",
+                    group_name="Oakridge Family & Home",
+                    created_at="2026-07-10T16:00:00Z",
+                    updated_at="2026-07-10T16:00:00Z",
                 ),
-                LifecycleItem(
+                LifecycleItemModel(
                     id="item_11",
                     name="Bosch Dishwasher 5-Year Parts Warranty",
-                    lifecycleType=LifecycleType.warranty,
-                    dueDate=get_relative_date_str(120),  # Future / Normal
-                    status=ItemStatus.active,
-                    ownerId="user_alex",
-                    ownerEmail="alex@example.com",
-                    groupId="group_home",
-                    groupName="Oakridge Family & Home",
-                    createdAt="2026-08-01T11:00:00Z",
-                    updatedAt="2026-08-01T11:00:00Z",
+                    lifecycle_type=LifecycleType.warranty.value,
+                    due_date=get_relative_date_str(120),  # Future / Normal
+                    status=ItemStatus.active.value,
+                    owner_id="user_alex",
+                    owner_email="alex@example.com",
+                    group_id="group_home",
+                    group_name="Oakridge Family & Home",
+                    created_at="2026-08-01T11:00:00Z",
+                    updated_at="2026-08-01T11:00:00Z",
                 ),
-                LifecycleItem(
+                LifecycleItemModel(
                     id="item_12",
                     name="Espresso Machine Manufacturer Warranty",
-                    lifecycleType=LifecycleType.warranty,
-                    dueDate=None,  # Missing date allowed
-                    status=ItemStatus.active,
-                    ownerId="user_alex",
-                    ownerEmail="alex@example.com",
-                    groupId=None,
-                    groupName=None,
-                    createdAt="2026-09-02T13:00:00Z",
-                    updatedAt="2026-09-02T13:00:00Z",
+                    lifecycle_type=LifecycleType.warranty.value,
+                    due_date=None,  # Missing date allowed
+                    status=ItemStatus.active.value,
+                    owner_id="user_alex",
+                    owner_email="alex@example.com",
+                    group_id=None,
+                    group_name=None,
+                    created_at="2026-09-02T13:00:00Z",
+                    updated_at="2026-09-02T13:00:00Z",
                 ),
             ]
-            for itm in seed_items:
-                self.items[itm.id] = itm
+            session.add_all(seed_items)
+            session.commit()
 
     # ---------------- USER METHODS ----------------
 
     def get_default_user(self) -> UserInDB:
-        with self._lock:
-            if "user_alex" in self.users:
-                return self.users["user_alex"]
-            first_user = next(iter(self.users.values()), None)
+        with self.get_session() as session:
+            alex = session.query(UserModel).filter(UserModel.id == "user_alex").first()
+            if alex:
+                return alex.to_user_in_db()
+            first_user = session.query(UserModel).first()
             if first_user:
-                return first_user
+                return first_user.to_user_in_db()
             # Fallback user if empty
-            u = UserInDB(
+            u = UserModel(
                 id="user_alex",
                 email="alex@example.com",
                 name="Alex Taylor",
-                createdAt=get_current_iso_time(),
+                created_at=get_current_iso_time(),
                 hashed_password="",
             )
-            self.users[u.id] = u
-            return u
+            session.add(u)
+            session.commit()
+            return u.to_user_in_db()
 
     def get_user_by_id(self, user_id: str) -> Optional[UserInDB]:
-        with self._lock:
-            return self.users.get(user_id)
+        with self.get_session() as session:
+            user = session.query(UserModel).filter(UserModel.id == user_id).first()
+            return user.to_user_in_db() if user else None
 
     def get_user_by_email(self, email: str) -> Optional[UserInDB]:
         clean = email.strip().lower()
-        with self._lock:
-            for u in self.users.values():
-                if u.email.lower() == clean:
-                    return u
-            return None
+        with self.get_session() as session:
+            user = session.query(UserModel).filter(func.lower(UserModel.email) == clean).first()
+            return user.to_user_in_db() if user else None
 
     def create_user(self, email: str, name: str, hashed_password: str) -> UserInDB:
-        with self._lock:
-            user_id = str(uuid.uuid4())
-            new_user = UserInDB(
-                id=user_id,
-                email=email.strip().lower(),
-                name=name.strip(),
-                createdAt=get_current_iso_time(),
-                hashed_password=hashed_password,
-            )
-            self.users[new_user.id] = new_user
-            return new_user
+        user_id = str(uuid.uuid4())
+        new_user = UserModel(
+            id=user_id,
+            email=email.strip().lower(),
+            name=name.strip(),
+            created_at=get_current_iso_time(),
+            hashed_password=hashed_password,
+        )
+        with self.get_session() as session:
+            session.add(new_user)
+            session.commit()
+            return new_user.to_user_in_db()
 
     def list_users(self) -> List[User]:
-        with self._lock:
-            return [
-                User(id=u.id, email=u.email, name=u.name, createdAt=u.createdAt)
-                for u in self.users.values()
-            ]
+        with self.get_session() as session:
+            users = session.query(UserModel).all()
+            return [u.to_user() for u in users]
 
     def delete_user(self, user_id: str) -> bool:
         """
@@ -400,31 +466,44 @@ class InMemoryStore:
         - Deletes groups owned by user and all items in those groups
         - Removes user email from member list of other groups
         """
-        with self._lock:
-            target_user = self.users.get(user_id)
+        with self._lock, self.get_session() as session:
+            target_user = session.query(UserModel).filter(UserModel.id == user_id).first()
             if not target_user:
                 return False
 
             user_email_lower = target_user.email.lower()
 
             # Find groups owned by user
-            owned_group_ids = {g.id for g in self.groups.values() if g.ownerId == user_id}
+            owned_groups = session.query(GroupModel.id).filter(GroupModel.owner_id == user_id).all()
+            owned_group_ids = [g[0] for g in owned_groups]
 
             # Delete items owned by user or inside user's owned groups
-            self.items = {
-                k: itm
-                for k, itm in self.items.items()
-                if itm.ownerId != user_id and (itm.groupId not in owned_group_ids)
-            }
+            if owned_group_ids:
+                session.query(LifecycleItemModel).filter(
+                    or_(
+                        LifecycleItemModel.owner_id == user_id,
+                        LifecycleItemModel.group_id.in_(owned_group_ids),
+                    )
+                ).delete(synchronize_session=False)
+            else:
+                session.query(LifecycleItemModel).filter(
+                    LifecycleItemModel.owner_id == user_id
+                ).delete(synchronize_session=False)
 
-            # Delete groups owned by user
-            self.groups = {k: g for k, g in self.groups.items() if g.ownerId != user_id}
+            # Delete groups owned by user (cascade deletes their group_members)
+            session.query(GroupMemberModel).filter(
+                GroupMemberModel.group_id.in_(owned_group_ids)
+            ).delete(synchronize_session=False)
+            session.query(GroupModel).filter(GroupModel.owner_id == user_id).delete(synchronize_session=False)
 
             # Remove email from remaining groups
-            for g in self.groups.values():
-                g.memberEmails = [em for em in g.memberEmails if em.lower() != user_email_lower]
+            session.query(GroupMemberModel).filter(
+                func.lower(GroupMemberModel.email) == user_email_lower
+            ).delete(synchronize_session=False)
 
-            del self.users[user_id]
+            # Delete the user record
+            session.delete(target_user)
+            session.commit()
             return True
 
     # ---------------- ITEM METHODS ----------------
@@ -436,48 +515,56 @@ class InMemoryStore:
         lifecycle_type: Optional[LifecycleType] = None,
         search_query: Optional[str] = None,
     ) -> List[LifecycleItem]:
-        with self._lock:
+        with self.get_session() as session:
             user_email_lower = user.email.lower()
-            # Groups user belongs to
-            accessible_group_ids = {
-                g.id
-                for g in self.groups.values()
-                if any(em.lower() == user_email_lower for em in g.memberEmails)
-            }
+            # Accessible group IDs
+            accessible_group_ids = [
+                row[0]
+                for row in session.query(GroupMemberModel.group_id)
+                .filter(func.lower(GroupMemberModel.email) == user_email_lower)
+                .all()
+            ]
 
-            # Filter items accessible to user:
-            # 1. Personal items owned by user (groupId is None)
-            # 2. Group items where user is a group member
-            accessible: List[LifecycleItem] = []
-            for item in self.items.values():
-                if item.groupId is None:
-                    if item.ownerId == user.id:
-                        accessible.append(item)
-                elif item.groupId in accessible_group_ids:
-                    accessible.append(item)
+            # Base accessibility condition:
+            # Personal items owned by user OR group items where user is member
+            if accessible_group_ids:
+                accessibility_filter = or_(
+                    and_(LifecycleItemModel.group_id.is_(None), LifecycleItemModel.owner_id == user.id),
+                    LifecycleItemModel.group_id.in_(accessible_group_ids),
+                )
+            else:
+                accessibility_filter = and_(
+                    LifecycleItemModel.group_id.is_(None), LifecycleItemModel.owner_id == user.id
+                )
 
-            # Apply group filter
+            query = session.query(LifecycleItemModel).filter(accessibility_filter)
+
+            # Group filter
             if group_id is not None:
                 if group_id == "null":
-                    accessible = [i for i in accessible if i.groupId is None]
+                    query = query.filter(LifecycleItemModel.group_id.is_(None))
                 else:
-                    accessible = [i for i in accessible if i.groupId == group_id]
+                    query = query.filter(LifecycleItemModel.group_id == group_id)
 
-            # Apply lifecycle type filter
+            # Lifecycle type filter
             if lifecycle_type is not None:
-                accessible = [i for i in accessible if i.lifecycleType == lifecycle_type]
+                type_val = lifecycle_type.value if hasattr(lifecycle_type, "value") else str(lifecycle_type)
+                query = query.filter(LifecycleItemModel.lifecycle_type == type_val)
 
-            # Apply search query
+            # Search query filter
             if search_query and search_query.strip():
-                q = search_query.strip().lower()
-                accessible = [
-                    i
-                    for i in accessible
-                    if q in i.name.lower() or (i.groupName and q in i.groupName.lower())
-                ]
+                q = f"%{search_query.strip().lower()}%"
+                query = query.filter(
+                    or_(
+                        func.lower(LifecycleItemModel.name).like(q),
+                        func.lower(LifecycleItemModel.group_name).like(q),
+                    )
+                )
 
-            # Sorting:
-            # Overdue (1) -> Upcoming (2) -> Normal (3) -> No date (4) -> Completed (5)
+            item_models = query.all()
+            accessible_items = [im.to_lifecycle_item() for im in item_models]
+
+            # Sorting: Overdue (1) -> Upcoming (2) -> Normal (3) -> No date (4) -> Completed (5)
             today_str = get_today_date_str()
 
             def urgency_rank(itm: LifecycleItem) -> int:
@@ -497,228 +584,313 @@ class InMemoryStore:
                 due = itm.dueDate or "9999-99-99"
                 return (rank, due, itm.createdAt)
 
-            accessible.sort(key=sort_key)
-            return accessible
+            accessible_items.sort(key=sort_key)
+            return accessible_items
 
     def get_item_by_id(self, item_id: str) -> Optional[LifecycleItem]:
-        with self._lock:
-            return self.items.get(item_id)
+        with self.get_session() as session:
+            item = session.query(LifecycleItemModel).filter(LifecycleItemModel.id == item_id).first()
+            return item.to_lifecycle_item() if item else None
 
     def create_item(self, user: User, data: CreateItemDTO) -> LifecycleItem:
-        with self._lock:
+        with self.get_session() as session:
             group_name = None
             if data.groupId:
-                group = self.groups.get(data.groupId)
+                group = session.query(GroupModel).filter(GroupModel.id == data.groupId).first()
                 if not group:
                     raise ValueError("Target group not found")
-                if not any(em.lower() == user.email.lower() for em in group.memberEmails):
+                user_email_lower = user.email.lower()
+                is_member = (
+                    session.query(GroupMemberModel)
+                    .filter(
+                        GroupMemberModel.group_id == data.groupId,
+                        func.lower(GroupMemberModel.email) == user_email_lower,
+                    )
+                    .first()
+                ) is not None
+                if not is_member:
                     raise PermissionError("Not authorized to add items to this group")
                 group_name = group.name
 
             item_id = str(uuid.uuid4())
             now_iso = get_current_iso_time()
-            new_item = LifecycleItem(
+            status_val = (
+                (data.status.value if hasattr(data.status, "value") else data.status)
+                if data.status
+                else ItemStatus.active.value
+            )
+            type_val = (
+                data.lifecycleType.value
+                if hasattr(data.lifecycleType, "value")
+                else str(data.lifecycleType)
+            )
+
+            new_item = LifecycleItemModel(
                 id=item_id,
                 name=data.name.strip(),
-                lifecycleType=data.lifecycleType,
-                dueDate=data.dueDate.strip()[:10] if data.dueDate else None,
-                status=data.status or ItemStatus.active,
-                ownerId=user.id,
-                ownerEmail=user.email,
-                groupId=data.groupId,
-                groupName=group_name,
-                createdAt=now_iso,
-                updatedAt=now_iso,
+                lifecycle_type=type_val,
+                due_date=data.dueDate.strip()[:10] if data.dueDate else None,
+                status=status_val,
+                owner_id=user.id,
+                owner_email=user.email,
+                group_id=data.groupId,
+                group_name=group_name,
+                created_at=now_iso,
+                updated_at=now_iso,
             )
-            self.items[new_item.id] = new_item
-            return new_item
+            session.add(new_item)
+            session.commit()
+            return new_item.to_lifecycle_item()
 
     def update_item(self, user: User, item_id: str, data: UpdateItemDTO) -> Optional[LifecycleItem]:
-        with self._lock:
-            item = self.items.get(item_id)
+        with self.get_session() as session:
+            item = session.query(LifecycleItemModel).filter(LifecycleItemModel.id == item_id).first()
             if not item:
                 return None
 
-            # Permission check:
-            # If personal item: must be owner.
-            # If group item: any group member can edit (Decision 14).
             user_email_lower = user.email.lower()
-            if item.groupId:
-                group = self.groups.get(item.groupId)
-                if not group or not any(em.lower() == user_email_lower for em in group.memberEmails):
+            if item.group_id:
+                is_member = (
+                    session.query(GroupMemberModel)
+                    .filter(
+                        GroupMemberModel.group_id == item.group_id,
+                        func.lower(GroupMemberModel.email) == user_email_lower,
+                    )
+                    .first()
+                ) is not None
+                if not is_member:
                     raise PermissionError("Not authorized to edit this shared item")
-            elif item.ownerId != user.id:
+            elif item.owner_id != user.id:
                 raise PermissionError("Not authorized to edit this item")
 
-            target_group_id = item.groupId
-            target_group_name = item.groupName
+            target_group_id = item.group_id
+            target_group_name = item.group_name
 
             if data.groupId is not None:
                 if data.groupId == "" or data.groupId == "null":
                     target_group_id = None
                     target_group_name = None
                 else:
-                    new_group = self.groups.get(data.groupId)
+                    new_group = session.query(GroupModel).filter(GroupModel.id == data.groupId).first()
                     if not new_group:
                         raise ValueError("Target group not found")
-                    if not any(em.lower() == user_email_lower for em in new_group.memberEmails):
+                    is_member_new = (
+                        session.query(GroupMemberModel)
+                        .filter(
+                            GroupMemberModel.group_id == new_group.id,
+                            func.lower(GroupMemberModel.email) == user_email_lower,
+                        )
+                        .first()
+                    ) is not None
+                    if not is_member_new:
                         raise PermissionError("Not authorized to assign item to this group")
                     target_group_id = new_group.id
                     target_group_name = new_group.name
 
-            updated_item = LifecycleItem(
-                id=item.id,
-                name=data.name.strip() if data.name is not None else item.name,
-                lifecycleType=data.lifecycleType if data.lifecycleType is not None else item.lifecycleType,
-                dueDate=(
-                    data.dueDate.strip()[:10]
-                    if (data.dueDate and data.dueDate.strip())
-                    else (None if data.dueDate == "" else item.dueDate)
-                ),
-                status=data.status if data.status is not None else item.status,
-                ownerId=item.ownerId,
-                ownerEmail=item.ownerEmail,
-                groupId=target_group_id,
-                groupName=target_group_name,
-                createdAt=item.createdAt,
-                updatedAt=get_current_iso_time(),
-            )
-            self.items[item.id] = updated_item
-            return updated_item
+            if data.name is not None:
+                item.name = data.name.strip()
+            if data.lifecycleType is not None:
+                item.lifecycle_type = (
+                    data.lifecycleType.value
+                    if hasattr(data.lifecycleType, "value")
+                    else str(data.lifecycleType)
+                )
+            if data.dueDate is not None:
+                if data.dueDate == "":
+                    item.due_date = None
+                elif data.dueDate.strip():
+                    item.due_date = data.dueDate.strip()[:10]
+            if data.status is not None:
+                item.status = (
+                    data.status.value if hasattr(data.status, "value") else str(data.status)
+                )
+
+            item.group_id = target_group_id
+            item.group_name = target_group_name
+            item.updated_at = get_current_iso_time()
+            session.commit()
+            return item.to_lifecycle_item()
 
     def toggle_item_completion(self, item_id: str) -> Optional[LifecycleItem]:
-        with self._lock:
-            item = self.items.get(item_id)
+        with self.get_session() as session:
+            item = session.query(LifecycleItemModel).filter(LifecycleItemModel.id == item_id).first()
             if not item:
                 return None
 
-            new_status = ItemStatus.active if item.status == ItemStatus.completed else ItemStatus.completed
-            updated_item = LifecycleItem(
-                id=item.id,
-                name=item.name,
-                lifecycleType=item.lifecycleType,
-                dueDate=item.dueDate,
-                status=new_status,
-                ownerId=item.ownerId,
-                ownerEmail=item.ownerEmail,
-                groupId=item.groupId,
-                groupName=item.groupName,
-                createdAt=item.createdAt,
-                updatedAt=get_current_iso_time(),
+            new_status = (
+                ItemStatus.active.value
+                if item.status == ItemStatus.completed.value
+                else ItemStatus.completed.value
             )
-            self.items[item.id] = updated_item
-            return updated_item
+            item.status = new_status
+            item.updated_at = get_current_iso_time()
+            session.commit()
+            return item.to_lifecycle_item()
 
     def delete_item(self, user: User, item_id: str) -> bool:
-        with self._lock:
-            item = self.items.get(item_id)
+        with self.get_session() as session:
+            item = session.query(LifecycleItemModel).filter(LifecycleItemModel.id == item_id).first()
             if not item:
                 return False
 
             user_email_lower = user.email.lower()
-            if item.groupId:
-                group = self.groups.get(item.groupId)
-                if not group or not any(em.lower() == user_email_lower for em in group.memberEmails):
+            if item.group_id:
+                is_member = (
+                    session.query(GroupMemberModel)
+                    .filter(
+                        GroupMemberModel.group_id == item.group_id,
+                        func.lower(GroupMemberModel.email) == user_email_lower,
+                    )
+                    .first()
+                ) is not None
+                if not is_member:
                     raise PermissionError("Not authorized to delete this shared item")
-            elif item.ownerId != user.id:
+            elif item.owner_id != user.id:
                 raise PermissionError("Not authorized to delete this item")
 
-            del self.items[item_id]
+            session.delete(item)
+            session.commit()
             return True
 
     # ---------------- GROUP METHODS ----------------
 
     def get_groups(self, user: User) -> List[Group]:
-        with self._lock:
+        with self.get_session() as session:
             user_email_lower = user.email.lower()
-            return [
-                g
-                for g in self.groups.values()
-                if any(em.lower() == user_email_lower for em in g.memberEmails)
+            accessible_group_ids = [
+                row[0]
+                for row in session.query(GroupMemberModel.group_id)
+                .filter(func.lower(GroupMemberModel.email) == user_email_lower)
+                .all()
             ]
+            if not accessible_group_ids:
+                return []
+            groups = session.query(GroupModel).filter(GroupModel.id.in_(accessible_group_ids)).all()
+            return [g.to_group() for g in groups]
 
     def get_group_by_id(self, group_id: str) -> Optional[Group]:
-        with self._lock:
-            return self.groups.get(group_id)
+        with self.get_session() as session:
+            group = session.query(GroupModel).filter(GroupModel.id == group_id).first()
+            return group.to_group() if group else None
 
     def create_group(self, user: User, name: str) -> Group:
-        with self._lock:
-            group_id = str(uuid.uuid4())
-            new_group = Group(
-                id=group_id,
-                name=name.strip(),
-                ownerId=user.id,
-                ownerEmail=user.email,
-                memberEmails=[user.email],
-                createdAt=get_current_iso_time(),
-            )
-            self.groups[new_group.id] = new_group
-            return new_group
+        group_id = str(uuid.uuid4())
+        now_iso = get_current_iso_time()
+        new_group = GroupModel(
+            id=group_id,
+            name=name.strip(),
+            owner_id=user.id,
+            owner_email=user.email,
+            created_at=now_iso,
+        )
+        with self.get_session() as session:
+            session.add(new_group)
+            session.flush()
+            member = GroupMemberModel(group_id=group_id, email=user.email.strip().lower())
+            session.add(member)
+            session.commit()
+            session.refresh(new_group)
+            return new_group.to_group()
 
     def add_member(self, user: User, group_id: str, email: str) -> Optional[Group]:
-        with self._lock:
-            group = self.groups.get(group_id)
+        with self.get_session() as session:
+            group = session.query(GroupModel).filter(GroupModel.id == group_id).first()
             if not group:
                 return None
 
             user_email_lower = user.email.lower()
-            if not any(em.lower() == user_email_lower for em in group.memberEmails):
+            is_member = (
+                session.query(GroupMemberModel)
+                .filter(
+                    GroupMemberModel.group_id == group_id,
+                    func.lower(GroupMemberModel.email) == user_email_lower,
+                )
+                .first()
+            ) is not None
+            if not is_member:
                 raise PermissionError("Not authorized to invite members to this group")
 
             clean_email = email.strip().lower()
-            if not any(em.lower() == clean_email for em in group.memberEmails):
-                group.memberEmails.append(clean_email)
-            return group
+            already_member = (
+                session.query(GroupMemberModel)
+                .filter(
+                    GroupMemberModel.group_id == group_id,
+                    func.lower(GroupMemberModel.email) == clean_email,
+                )
+                .first()
+            ) is not None
+            if not already_member:
+                new_member = GroupMemberModel(group_id=group_id, email=clean_email)
+                session.add(new_member)
+                session.commit()
+                session.refresh(group)
+            return group.to_group()
 
     def remove_member(
         self, requester: User, group_id: str, member_email: str
     ) -> Tuple[Optional[Group], Optional[str]]:
-        with self._lock:
-            group = self.groups.get(group_id)
+        with self.get_session() as session:
+            group = session.query(GroupModel).filter(GroupModel.id == group_id).first()
             if not group:
                 return None, "Group not found"
 
-            if group.ownerId != requester.id:
+            if group.owner_id != requester.id:
                 return None, "Only group owner can remove members"
 
             clean_email = member_email.strip().lower()
-            if clean_email == group.ownerEmail.lower():
+            if clean_email == group.owner_email.lower():
                 return None, "Cannot remove group owner"
 
-            group.memberEmails = [em for em in group.memberEmails if em.lower() != clean_email]
-            # Decision 18: Items remain with the group when a member departs
-            return group, None
+            session.query(GroupMemberModel).filter(
+                GroupMemberModel.group_id == group_id,
+                func.lower(GroupMemberModel.email) == clean_email,
+            ).delete(synchronize_session=False)
+            session.commit()
+            session.refresh(group)
+            return group.to_group(), None
 
     def leave_group(self, user: User, group_id: str) -> Tuple[bool, Optional[str]]:
-        with self._lock:
-            group = self.groups.get(group_id)
+        with self.get_session() as session:
+            group = session.query(GroupModel).filter(GroupModel.id == group_id).first()
             if not group:
                 return False, "Group not found"
 
-            if group.ownerId == user.id:
+            if group.owner_id == user.id:
                 return False, "Group owner cannot leave group; delete group instead"
 
             user_email_lower = user.email.lower()
-            group.memberEmails = [em for em in group.memberEmails if em.lower() != user_email_lower]
+            session.query(GroupMemberModel).filter(
+                GroupMemberModel.group_id == group_id,
+                func.lower(GroupMemberModel.email) == user_email_lower,
+            ).delete(synchronize_session=False)
+            session.commit()
             return True, None
 
     def delete_group(self, requester: User, group_id: str) -> Tuple[bool, Optional[str]]:
         """
         Decision 30: Deleting a group deletes the group and all its shared items.
         """
-        with self._lock:
-            group = self.groups.get(group_id)
+        with self._lock, self.get_session() as session:
+            group = session.query(GroupModel).filter(GroupModel.id == group_id).first()
             if not group:
                 return False, "Group not found"
 
-            if group.ownerId != requester.id:
+            if group.owner_id != requester.id:
                 return False, "Only group owner can delete group"
 
             # 1. Cascade delete all items in this group
-            self.items = {k: itm for k, itm in self.items.items() if itm.groupId != group_id}
+            session.query(LifecycleItemModel).filter(
+                LifecycleItemModel.group_id == group_id
+            ).delete(synchronize_session=False)
 
-            # 2. Delete group
-            del self.groups[group_id]
+            # 2. Delete members
+            session.query(GroupMemberModel).filter(
+                GroupMemberModel.group_id == group_id
+            ).delete(synchronize_session=False)
+
+            # 3. Delete group
+            session.delete(group)
+            session.commit()
             return True, None
 
     # ---------------- REMINDERS & DIGEST METHODS ----------------
@@ -744,18 +916,54 @@ class InMemoryStore:
         )
 
     def get_digest_config(self) -> DailyDigestConfig:
-        with self._lock:
-            return self.digest_config
+        with self.get_session() as session:
+            cfg = (
+                session.query(DailyDigestConfigModel)
+                .filter(DailyDigestConfigModel.id == 1)
+                .first()
+            )
+            if not cfg:
+                cfg = DailyDigestConfigModel(
+                    id=1,
+                    time_zone="UTC",
+                    delivery_time=DigestDeliveryTime.TIME_08.value,
+                    enabled=True,
+                )
+                session.add(cfg)
+                session.commit()
+                session.refresh(cfg)
+            return cfg.to_digest_config()
 
     def update_digest_config(self, data: UpdateDigestConfigRequest) -> DailyDigestConfig:
-        with self._lock:
+        with self.get_session() as session:
+            cfg = (
+                session.query(DailyDigestConfigModel)
+                .filter(DailyDigestConfigModel.id == 1)
+                .first()
+            )
+            if not cfg:
+                cfg = DailyDigestConfigModel(
+                    id=1,
+                    time_zone="UTC",
+                    delivery_time=DigestDeliveryTime.TIME_08.value,
+                    enabled=True,
+                )
+                session.add(cfg)
+
             if data.timeZone is not None:
-                self.digest_config.timeZone = data.timeZone
+                cfg.time_zone = data.timeZone
             if data.deliveryTime is not None:
-                self.digest_config.deliveryTime = data.deliveryTime
+                cfg.delivery_time = (
+                    data.deliveryTime.value
+                    if hasattr(data.deliveryTime, "value")
+                    else str(data.deliveryTime)
+                )
             if data.enabled is not None:
-                self.digest_config.enabled = data.enabled
-            return self.digest_config
+                cfg.enabled = data.enabled
+
+            session.commit()
+            session.refresh(cfg)
+            return cfg.to_digest_config()
 
     def generate_digest(self, user: User, recipient_email: Optional[str] = None) -> DailyDigestEmail:
         reminders = self.get_reminders_summary(user)
@@ -826,37 +1034,73 @@ class InMemoryStore:
 </body>
 </html>"""
 
-        digest = DailyDigestEmail(
-            id=f"digest_{int(datetime.now(timezone.utc).timestamp())}_{str(uuid.uuid4())[:6]}",
-            recipientEmail=target_email,
-            recipientName=user.name,
-            generatedAt=get_current_iso_time(),
-            deliveryTime=config.deliveryTime,
-            timeZone=config.timeZone,
+        digest_id = f"digest_{int(datetime.now(timezone.utc).timestamp())}_{str(uuid.uuid4())[:6]}"
+        now_iso = get_current_iso_time()
+
+        history_model = DailyDigestHistoryModel(
+            id=digest_id,
+            recipient_email=target_email,
+            recipient_name=user.name,
+            generated_at=now_iso,
+            delivery_time=config.deliveryTime.value if hasattr(config.deliveryTime, "value") else str(config.deliveryTime),
+            time_zone=config.timeZone,
             subject=subject,
-            overdueCount=len(reminders.overdue),
-            upcomingCount=len(reminders.upcoming),
-            overdueItems=reminders.overdue,
-            upcomingItems=reminders.upcoming,
-            htmlContent=html_content,
-            textContent="\n".join(text_lines),
+            overdue_count=len(reminders.overdue),
+            upcoming_count=len(reminders.upcoming),
+            overdue_items=json.dumps([it.model_dump() for it in reminders.overdue]),
+            upcoming_items=json.dumps([it.model_dump() for it in reminders.upcoming]),
+            html_content=html_content,
+            text_content="\n".join(text_lines),
         )
 
-        with self._lock:
-            self.digest_history.insert(0, digest)
-            if len(self.digest_history) > 20:
-                self.digest_history = self.digest_history[:20]
+        with self.get_session() as session:
+            session.add(history_model)
+            session.commit()
 
-        return digest
+            # Retain only the 20 most recent entries
+            extra_ids = [
+                row[0]
+                for row in session.query(DailyDigestHistoryModel.id)
+                .order_by(DailyDigestHistoryModel.pk.desc())
+                .offset(20)
+                .all()
+            ]
+            if extra_ids:
+                session.query(DailyDigestHistoryModel).filter(
+                    DailyDigestHistoryModel.id.in_(extra_ids)
+                ).delete(synchronize_session=False)
+                session.commit()
+
+            return history_model.to_digest_email()
 
     def get_digest_history(self) -> List[DailyDigestEmail]:
-        with self._lock:
-            return list(self.digest_history)
+        with self.get_session() as session:
+            records = (
+                session.query(DailyDigestHistoryModel)
+                .order_by(DailyDigestHistoryModel.pk.desc())
+                .limit(20)
+                .all()
+            )
+            return [r.to_digest_email() for r in records]
 
+
+# Aliases for backwards compatibility
+Store = DatabaseStore
+SQLAlchemyStore = DatabaseStore
+InMemoryStore = DatabaseStore
 
 # Global singleton instance
-_store_instance = InMemoryStore()
+_store_instance: Optional[DatabaseStore] = None
 
 
-def get_store() -> InMemoryStore:
+def get_store() -> DatabaseStore:
+    global _store_instance
+    if _store_instance is None:
+        _store_instance = DatabaseStore()
+    return _store_instance
+
+
+def reset_store(database_url: Optional[str] = None) -> DatabaseStore:
+    global _store_instance
+    _store_instance = DatabaseStore(database_url=database_url)
     return _store_instance
