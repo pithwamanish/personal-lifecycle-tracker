@@ -1,0 +1,41 @@
+name: personal-lifecycle-tracker-prod
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: base
+    container_name: personal-lifecycle-tracker-backend-prod
+    environment:
+      PORT: 8000
+      PYTHONUNBUFFERED: "1"
+      CORS_ORIGINS: "http://localhost:8088"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: prod
+    container_name: personal-lifecycle-tracker-frontend-prod
+    environment:
+      PORT: 80
+      BACKEND_URL: backend:8000
+    ports:
+      - "${PROD_PORT:-8088}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
