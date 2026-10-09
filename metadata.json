@@ -1,0 +1,6 @@
+{
+  "name": "Personal Lifecycle Tracker",
+  "description": "Track Renewals, Maintenance, and Warranties for independent users and shared groups with action dashboards, reminders, and daily digests.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
