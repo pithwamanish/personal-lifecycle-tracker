@@ -1,0 +1,1111 @@
+openapi: 3.0.3
+info:
+  title: Personal Lifecycle Tracker API
+  description: >
+    Production REST API for Personal Lifecycle Tracker.
+    Manages Renewals, Maintenance, and Warranties for independent users and shared groups,
+    including action summaries and scheduled daily morning email digests.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8003
+    description: Local Container Runtime
+  - url: http://localhost:8000
+    description: Alternative Container Port
+
+paths:
+  /health:
+    get:
+      summary: Liveness and readiness healthcheck
+      description: Returns health status of service and database connectivity.
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /api/v1/auth/signup:
+    post:
+      summary: Register a new user
+      description: Register a new independent user account using email, password, and display name.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Invalid request or email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/login:
+    post:
+      summary: Log in with email and password
+      description: Authenticate an existing user and obtain a JWT bearer token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/me:
+    get:
+      summary: Retrieve current authenticated user
+      description: Returns the user record corresponding to the provided JWT bearer token.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Authenticated user details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/logout:
+    post:
+      summary: Log out current user
+      description: Invalidates or acknowledges client session termination.
+      responses:
+        '200':
+          description: Logged out successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+
+  /api/v1/users:
+    get:
+      summary: List all registered users (demo / dev discovery)
+      description: Returns all users for testing multi-user switching and group invitations.
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+
+  /api/v1/users/{userId}:
+    delete:
+      summary: Delete user account and cascade delete owned items and groups
+      description: Permanently deletes a user account, their personal items, and owned groups.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: User account deleted successfully
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/items:
+    get:
+      summary: List lifecycle items accessible to user
+      description: >
+        Returns personal items owned by the current user plus shared group items
+        for groups in which the user is a member.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: groupId
+          in: query
+          required: false
+          schema:
+            type: string
+            nullable: true
+          description: Filter by groupId ('null' for personal items only)
+        - name: type
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/LifecycleType'
+        - name: searchQuery
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Array of lifecycle items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LifecycleItem'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Create a new lifecycle item
+      description: Creates a new lifecycle item under personal ownership or within a shared group.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateItemDTO'
+      responses:
+        '201':
+          description: Item created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LifecycleItem'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/items/{id}:
+    get:
+      summary: Get lifecycle item by ID
+      description: Fetches a single lifecycle item accessible to the current user.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lifecycle item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LifecycleItem'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      summary: Update a lifecycle item
+      description: Updates editable common fields of a personal or shared group item.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateItemDTO'
+      responses:
+        '200':
+          description: Updated item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LifecycleItem'
+        '400':
+          description: Validation or permission error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Permanently delete a lifecycle item
+      description: Deletes an item permanently (owner or group member).
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Item deleted successfully
+        '400':
+          description: Permission error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/items/{id}/complete:
+    post:
+      summary: Toggle or mark item completion
+      description: Toggles item status between 'active' and 'completed'. Retained in main list.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item with updated completion status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LifecycleItem'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/groups:
+    get:
+      summary: List groups for current user
+      description: Returns all groups where the current user is an owner or member.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Array of groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Group'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Create a new shared group
+      description: Creates a shared group with the current user as owner.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGroupRequest'
+      responses:
+        '201':
+          description: Group created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/groups/{id}:
+    get:
+      summary: Get group by ID
+      description: Fetches details for a specific group accessible to the user.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Group details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Delete group and cascade delete group items
+      description: Deletes a group and all its associated items. Only permitted by group owner.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Group deleted successfully
+        '400':
+          description: Permission denied or operation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/groups/{groupId}/members:
+    post:
+      summary: Invite or add member to group
+      description: Invites/adds a member by email address to the shared group.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddMemberRequest'
+      responses:
+        '200':
+          description: Member added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '400':
+          description: Invalid request or permission denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/groups/{groupId}/members/{memberEmail}:
+    delete:
+      summary: Remove member from group
+      description: Removes a member from a group. Group items remain with the group.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: memberEmail
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Member removed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '400':
+          description: Permission denied or invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/groups/{groupId}/leave:
+    post:
+      summary: Leave a group
+      description: Allows a non-owner member to leave a shared group. Items remain with the group.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully left group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Cannot leave as owner or invalid group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/reminders/summary:
+    get:
+      summary: Get active reminders summary (overdue, upcoming, total count)
+      description: Aggregates overdue and upcoming active items for the authenticated user.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Summary of active alerts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemindersSummary'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/reminders/digest/config:
+    get:
+      summary: Get daily digest configuration
+      description: Returns configuration for daily email digest (deliveryTime, timeZone, enabled).
+      responses:
+        '200':
+          description: Current digest configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyDigestConfig'
+    patch:
+      summary: Update daily digest configuration
+      description: Updates delivery time or timezone settings. Reminder channels remain enabled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDigestConfigRequest'
+      responses:
+        '200':
+          description: Updated digest config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyDigestConfig'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/reminders/digest/generate:
+    post:
+      summary: Generate and send or preview daily digest email
+      description: Generates the daily digest email payload containing upcoming and overdue items.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateDigestRequest'
+      responses:
+        '200':
+          description: Generated digest email payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyDigestEmail'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/reminders/digest/history:
+    get:
+      summary: List historical sent digest emails
+      description: Returns recent sent digest emails.
+      responses:
+        '200':
+          description: Array of sent digests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DailyDigestEmail'
+
+  /api/v1/dev/seed:
+    post:
+      summary: Reset and seed demo data
+      description: Resets data store to initial seed users, groups, and items.
+      responses:
+        '200':
+          description: Seed complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthStatus:
+      type: object
+      required:
+        - status
+        - database
+        - version
+      properties:
+        status:
+          type: string
+          example: healthy
+        database:
+          type: string
+          example: connected
+        version:
+          type: string
+          example: 1.0.0
+
+    LifecycleType:
+      type: string
+      enum:
+        - renewal
+        - maintenance
+        - warranty
+
+    ItemStatus:
+      type: string
+      enum:
+        - active
+        - completed
+
+    ItemUrgency:
+      type: string
+      enum:
+        - overdue
+        - upcoming
+        - normal
+        - no_date
+        - completed
+
+    DigestDeliveryTime:
+      type: string
+      enum:
+        - '06:00'
+        - '08:00'
+        - '09:00'
+        - '12:00'
+      example: '08:00'
+
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - name
+        - createdAt
+      properties:
+        id:
+          type: string
+          example: user_alex
+        email:
+          type: string
+          format: email
+          example: alex@example.com
+        name:
+          type: string
+          example: Alex Taylor
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-01-10T08:00:00Z'
+
+    AuthResponse:
+      type: object
+      required:
+        - user
+        - token
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+    SignupRequest:
+      type: object
+      required:
+        - email
+        - password
+        - name
+      properties:
+        email:
+          type: string
+          format: email
+          example: newuser@example.com
+        password:
+          type: string
+          minLength: 6
+          example: secretPass123
+        name:
+          type: string
+          example: New User
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: alex@example.com
+        password:
+          type: string
+          example: password123
+
+    LifecycleItem:
+      type: object
+      required:
+        - id
+        - name
+        - lifecycleType
+        - status
+        - ownerId
+        - ownerEmail
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          example: item_1
+        name:
+          type: string
+          example: Vehicle Auto Insurance Policy
+        lifecycleType:
+          $ref: '#/components/schemas/LifecycleType'
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+          example: '2026-11-15'
+        status:
+          $ref: '#/components/schemas/ItemStatus'
+        ownerId:
+          type: string
+          example: user_alex
+        ownerEmail:
+          type: string
+          format: email
+          example: alex@example.com
+        groupId:
+          type: string
+          nullable: true
+          example: group_vehicles
+        groupName:
+          type: string
+          nullable: true
+          example: Shared Vehicle Maintenance
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-08-01T08:00:00Z'
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2026-08-01T08:00:00Z'
+
+    CreateItemDTO:
+      type: object
+      required:
+        - name
+        - lifecycleType
+      properties:
+        name:
+          type: string
+          example: Vehicle Oil & Filter Change
+        lifecycleType:
+          $ref: '#/components/schemas/LifecycleType'
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+          example: '2026-10-25'
+        status:
+          $ref: '#/components/schemas/ItemStatus'
+          default: active
+        groupId:
+          type: string
+          nullable: true
+          example: group_vehicles
+
+    UpdateItemDTO:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Updated Policy Name
+        lifecycleType:
+          $ref: '#/components/schemas/LifecycleType'
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+          example: '2026-12-01'
+        status:
+          $ref: '#/components/schemas/ItemStatus'
+        groupId:
+          type: string
+          nullable: true
+          example: null
+
+    Group:
+      type: object
+      required:
+        - id
+        - name
+        - ownerId
+        - ownerEmail
+        - memberEmails
+        - createdAt
+      properties:
+        id:
+          type: string
+          example: group_home
+        name:
+          type: string
+          example: Oakridge Family & Home
+        ownerId:
+          type: string
+          example: user_alex
+        ownerEmail:
+          type: string
+          format: email
+          example: alex@example.com
+        memberEmails:
+          type: array
+          items:
+            type: string
+            format: email
+          example:
+            - alex@example.com
+            - sarah@example.com
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-02-15T10:00:00Z'
+
+    CreateGroupRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: Family & Home
+
+    AddMemberRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: member@example.com
+
+    DailyDigestConfig:
+      type: object
+      required:
+        - timeZone
+        - deliveryTime
+        - enabled
+      properties:
+        timeZone:
+          type: string
+          example: America/New_York
+        deliveryTime:
+          $ref: '#/components/schemas/DigestDeliveryTime'
+        enabled:
+          type: boolean
+          example: true
+
+    UpdateDigestConfigRequest:
+      type: object
+      properties:
+        timeZone:
+          type: string
+          example: America/New_York
+        deliveryTime:
+          $ref: '#/components/schemas/DigestDeliveryTime'
+        enabled:
+          type: boolean
+          example: true
+
+    DailyDigestEmail:
+      type: object
+      required:
+        - id
+        - recipientEmail
+        - recipientName
+        - generatedAt
+        - deliveryTime
+        - timeZone
+        - subject
+        - overdueCount
+        - upcomingCount
+        - overdueItems
+        - upcomingItems
+        - htmlContent
+        - textContent
+      properties:
+        id:
+          type: string
+          example: digest_1728518400000
+        recipientEmail:
+          type: string
+          format: email
+          example: alex@example.com
+        recipientName:
+          type: string
+          example: Alex Taylor
+        generatedAt:
+          type: string
+          format: date-time
+          example: '2026-10-09T08:00:00Z'
+        deliveryTime:
+          $ref: '#/components/schemas/DigestDeliveryTime'
+        timeZone:
+          type: string
+          example: America/New_York
+        subject:
+          type: string
+          example: 'Daily Lifecycle Digest: 2 Overdue, 3 Upcoming Actions'
+        overdueCount:
+          type: integer
+          example: 2
+        upcomingCount:
+          type: integer
+          example: 3
+        overdueItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/LifecycleItem'
+        upcomingItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/LifecycleItem'
+        htmlContent:
+          type: string
+        textContent:
+          type: string
+
+    GenerateDigestRequest:
+      type: object
+      properties:
+        recipientEmail:
+          type: string
+          format: email
+          nullable: true
+          example: alex@example.com
+
+    RemindersSummary:
+      type: object
+      required:
+        - overdue
+        - upcoming
+        - totalActiveReminders
+      properties:
+        overdue:
+          type: array
+          items:
+            $ref: '#/components/schemas/LifecycleItem'
+        upcoming:
+          type: array
+          items:
+            $ref: '#/components/schemas/LifecycleItem'
+        totalActiveReminders:
+          type: integer
+          example: 5
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: Resource not found
+
+    MessageResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: Operation completed successfully
