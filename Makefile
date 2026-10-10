@@ -1,4 +1,4 @@
-.PHONY: dev build test test-backend test-frontend test-integration lint down clean logs ps
+.PHONY: dev build test test-backend test-frontend test-integration test-e2e lint down clean logs ps
 
 dev:
 	docker compose up --build
@@ -9,7 +9,7 @@ up:
 build:
 	docker compose build
 
-test: test-backend test-frontend test-integration
+test: test-backend test-frontend test-integration test-e2e
 
 test-backend:
 	docker compose run --rm backend pytest tests -m "not integration"
@@ -19,6 +19,9 @@ test-integration:
 
 test-frontend:
 	docker compose run --rm frontend npm test
+
+test-e2e:
+	docker compose run --rm e2e
 
 lint:
 	docker compose run --rm frontend npm run lint

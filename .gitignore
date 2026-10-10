@@ -11,3 +11,5 @@ coverage/
 *.sqlite3
 __pycache__/
 .pytest_cache/
+playwright-report/
+test-results/

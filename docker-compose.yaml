@@ -72,5 +72,25 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  e2e:
+    build:
+      context: ./e2e
+      dockerfile: Dockerfile
+    container_name: personal-lifecycle-tracker-e2e
+    network_mode: host
+    environment:
+      BASE_URL: "http://localhost:${FRONTEND_PORT:-3003}"
+      BACKEND_URL: "http://localhost:${BACKEND_PORT:-8003}"
+      CI: "true"
+    volumes:
+      - ./e2e:/e2e
+      - /e2e/node_modules
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    profiles: ["test", "e2e"]
+
 volumes:
   postgres_data:

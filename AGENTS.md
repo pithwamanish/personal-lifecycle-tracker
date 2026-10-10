@@ -138,6 +138,13 @@ make lint
 docker compose run --rm frontend npm run lint
 ```
 
+### Run End-to-End Tests (Playwright in Docker)
+```bash
+make test-e2e
+# Or directly via Compose:
+docker compose run --rm e2e
+```
+
 ---
 
 ## 5. Environment Variables & Overrides
@@ -189,12 +196,22 @@ VITE_BACKEND_URL=http://backend:8000
 │   ├── pyproject.toml         # Pytest configuration
 │   ├── app/                   # FastAPI application & routers
 │   └── tests/                 # Backend pytest test suite
-└── frontend/
-    ├── Dockerfile             # Multi-stage: dev, builder, prod (Caddy)
-    ├── Caddyfile              # Production Caddy 2 reverse proxy config
-    ├── package.json           # Frontend dependencies & scripts
-    ├── vite.config.ts         # Vite server, host & backend proxy config
-    └── src/                   # React components, UI views & services
+├── frontend/
+│   ├── Dockerfile             # Multi-stage: dev, builder, prod (Caddy)
+│   ├── Caddyfile              # Production Caddy 2 reverse proxy config
+│   ├── package.json           # Frontend dependencies & scripts
+│   ├── vite.config.ts         # Vite server, host & backend proxy config
+│   └── src/                   # React components, UI views & services
+└── e2e/
+    ├── Dockerfile             # Microsoft Playwright v1.50 container
+    ├── package.json           # Playwright dependencies
+    ├── playwright.config.ts   # Test configuration targeting dev stack
+    ├── helpers.ts             # Test reset helper and auth utilities
+    ├── auth.spec.ts           # Authentication & account switching tests
+    ├── groups.spec.ts         # Shared groups & member management tests
+    ├── lifecycle-items.spec.ts# Renewal/maintenance/warranty CRUD & filters
+    ├── reminders-digest.spec.ts# Reminders drawer & email digest tests
+    └── spec-compliance.spec.ts# Comprehensive Section 6 acceptance journey
 ```
 
 regularly commit code to git 
