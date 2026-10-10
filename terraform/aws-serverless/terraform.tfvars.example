@@ -1,0 +1,21 @@
+# AWS Region
+aws_region = "us-east-1"
+
+# Environment Identifier
+environment = "production"
+
+# Project Name
+project_name = "personal-lifecycle-tracker"
+
+# Neon Serverless PostgreSQL Connection String (Use -pooler for PgBouncer connection pooling!)
+# Free Tier: create project at https://neon.tech and paste connection string here:
+database_url = "postgresql://user:password@ep-xyz-pooler.us-east-2.aws.neon.tech/lifecycle?sslmode=require"
+
+# JWT Auth Secret Key (Generate with: openssl rand -hex 32)
+secret_key = "super-secret-jwt-key-replace-with-secure-random-32-byte-hex"
+
+# Warmer Schedule (Keeps Lambda warm and Neon awake every 4 minutes for $0)
+warmer_rate = "rate(4 minutes)"
+
+# Daily Morning Email Digest (Triggers daily at 08:00 AM UTC)
+digest_cron = "cron(0 8 * * ? *)"
