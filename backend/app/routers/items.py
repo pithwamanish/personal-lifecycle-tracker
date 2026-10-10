@@ -12,6 +12,7 @@ from app.models import (
     User,
 )
 from app.store import DatabaseStore, get_store
+from app.telemetry import record_item_completed, record_item_created, record_item_deleted
 
 router = APIRouter()
 
@@ -24,12 +25,14 @@ async def list_items(
     current_user: User = Depends(get_current_user_optional),
     store: DatabaseStore = Depends(get_store),
 ) -> List[LifecycleItem]:
-    return store.get_items(
+    items = store.get_items(
         user=current_user,
         group_id=groupId,
         lifecycle_type=type,
         search_query=searchQuery,
     )
+    store.sync_metrics()
+    return items
 
 
 @router.post("", response_model=LifecycleItem, status_code=status.HTTP_201_CREATED)
@@ -39,7 +42,10 @@ async def create_item(
     store: DatabaseStore = Depends(get_store),
 ) -> LifecycleItem:
     try:
-        return store.create_item(user=current_user, data=payload)
+        item = store.create_item(user=current_user, data=payload)
+        record_item_created(item.lifecycleType.value)
+        store.sync_metrics()
+        return item
     except (ValueError, PermissionError) as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -78,6 +84,7 @@ async def update_item(
         updated = store.update_item(user=current_user, item_id=id, data=payload)
         if not updated:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+        store.sync_metrics()
         return updated
     except (ValueError, PermissionError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -99,6 +106,8 @@ async def delete_item(
         deleted = store.delete_item(user=current_user, item_id=id)
         if not deleted:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+        record_item_deleted(item.lifecycleType.value)
+        store.sync_metrics()
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -115,4 +124,8 @@ async def toggle_complete(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Item not found",
         )
+    status_str = updated.status.value if hasattr(updated.status, "value") else str(updated.status)
+    if status_str == "completed":
+        record_item_completed(updated.lifecycleType.value)
+    store.sync_metrics()
     return updated

@@ -18,8 +18,10 @@ Welcome to the **Personal Lifecycle Tracker** repository. This project manages R
 |---|---|---|---|
 | **Database (PostgreSQL)** | `5432` | `5434` (`${POSTGRES_PORT:-5434}`) | `pg_isready -U postgres -d lifecycle` |
 | **Backend (Dev)** | `8000` | `8003` (`${BACKEND_PORT:-8003}`) | `http://localhost:8003/health` |
+| **Backend Metrics (Prometheus)** | `8000` | `8003` (`${BACKEND_PORT:-8003}`) | `http://localhost:8003/metrics` |
 | **Frontend (Dev)** | `3000` | `3003` (`${FRONTEND_PORT:-3003}`) | `http://localhost:3003/` |
 | **API Docs (Swagger)** | `8000` | `8003` | `http://localhost:8003/docs` |
+| **Interactive ReDoc** | `8000` | `8003` | `http://localhost:8003/redoc` |
 | **Production Stack (Caddy)** | `80` | `8088` (`${PROD_PORT:-8088}`) | `http://localhost:8088/health` |
 | **OTel Collector (gRPC)** | `4317` | `4327` (`${OTEL_GRPC_PORT:-4327}`) | Internal gRPC OTLP receiver |
 | **OTel Collector (HTTP)** | `4318` | `4328` (`${OTEL_HTTP_PORT:-4328}`) | `http://localhost:4328/v1/traces` |
@@ -78,6 +80,7 @@ Both containers will report `Up (healthy)`.
 Access the application:
 - **Web Application UI**: [http://localhost:3003](http://localhost:3003)
 - **API Health Endpoint**: [http://localhost:8003/health](http://localhost:8003/health)
+- **Prometheus Metrics Endpoint**: [http://localhost:8003/metrics](http://localhost:8003/metrics)
 - **Interactive OpenAPI / Swagger UI**: [http://localhost:8003/docs](http://localhost:8003/docs)
 - **Interactive ReDoc Documentation**: [http://localhost:8003/redoc](http://localhost:8003/redoc)
 

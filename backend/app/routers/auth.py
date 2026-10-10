@@ -16,6 +16,7 @@ from app.models import (
     User,
 )
 from app.store import DatabaseStore, get_store
+from app.telemetry import record_user_login, record_user_signup
 
 router = APIRouter()
 
@@ -45,6 +46,7 @@ async def signup(
         createdAt=user_db.createdAt,
     )
     token = create_access_token({"sub": user.id, "email": user.email})
+    record_user_signup()
     return AuthResponse(user=user, token=token)
 
 
@@ -55,6 +57,7 @@ async def login(
 ) -> AuthResponse:
     user_db = store.get_user_by_email(payload.email)
     if not user_db or not verify_password(payload.password, user_db.hashed_password):
+        record_user_login(success=False)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -67,6 +70,7 @@ async def login(
         createdAt=user_db.createdAt,
     )
     token = create_access_token({"sub": user.id, "email": user.email})
+    record_user_login(success=True)
     return AuthResponse(user=user, token=token)
 
 

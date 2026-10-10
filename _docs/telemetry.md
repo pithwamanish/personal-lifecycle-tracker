@@ -70,10 +70,58 @@ The observability infrastructure is isolated in `observability/docker-compose.ya
 
 ---
 
-## 4. Excluded / Filtered Routes
+## 4. Application Metrics & Product Indicators
 
-Health checks and internal scraping endpoints are excluded from distributed traces to prevent log spam:
+All application metrics emitted by `api-backend` attach the mandatory Golden Triangle labels (`deployment_environment`, `service_version`, `service_name`).
+
+### A. Metadata & Golden Signals
+| Metric Name | Instrument | Labels | Purpose |
+|---|---|---|---|
+| `app_info` | Gauge | `deployment_environment`, `service_version`, `service_name` | Instantaneous metadata indicator reporting active environment and deployed version |
+| `app_http_server_duration_milliseconds` | Histogram | `http_route`, `http_status_code`, `http_method`, `deployment_environment`, `service_version`, `service_name` | Latency distribution percentiles (p50, p90, p99) by normalized route |
+| `app_http_requests_total` | Counter | `http_route`, `http_status_code`, `http_method`, `deployment_environment`, `service_version`, `service_name` | HTTP request throughput and error counts |
+
+### B. Product & Domain Metrics (Personal Lifecycle Tracker)
+| Metric Name | Instrument | Labels | Purpose |
+|---|---|---|---|
+| `app_items_created_total` | Counter | `lifecycle_type` (`renewal`, `maintenance`, `warranty`), `deployment_environment`, `service_version`, `service_name` | Tracks lifecycle item creation by category |
+| `app_items_completed_total` | Counter | `lifecycle_type`, `deployment_environment`, `service_version`, `service_name` | Tracks lifecycle completion actions |
+| `app_items_deleted_total` | Counter | `lifecycle_type`, `deployment_environment`, `service_version`, `service_name` | Tracks lifecycle deletion actions |
+| `app_lifecycle_items_current` | Gauge | `lifecycle_type`, `status` (`active`, `completed`, `overdue`), `deployment_environment`, `service_version`, `service_name` | Current database inventory of items |
+| `app_user_signups_total` | Counter | `deployment_environment`, `service_version`, `service_name` | User account registration volume |
+| `app_user_logins_total` | Counter | `status` (`success`, `failure`), `deployment_environment`, `service_version`, `service_name` | Authentication traffic and credential failure rate |
+| `app_groups_created_total` | Counter | `deployment_environment`, `service_version`, `service_name` | Shared group collaboration count |
+| `app_group_members_invited_total` | Counter | `deployment_environment`, `service_version`, `service_name` | Group membership invitations |
+| `app_digests_generated_total` | Counter | `status` (`success`, `failure`), `deployment_environment`, `service_version`, `service_name` | Scheduled morning email digest runs |
+| `app_reminders_summary_requests_total` | Counter | `deployment_environment`, `service_version`, `service_name` | In-app reminders drawer views |
+
+---
+
+## 5. Excluded / Filtered Routes
+
+Health checks and internal scraping endpoints are excluded from HTTP duration and latency metrics to prevent skew and log spam:
 - `/health`
 - `/healthz`
 - `/metrics`
 - `/favicon.ico`
+- `/docs`, `/redoc`, `/openapi.json`
+
+---
+
+## 6. Actionable Prometheus Alerting Rules (`observability/alert_rules.yml`)
+
+Prometheus evaluates alerting rules every 5s with mandatory `service`, `environment`, `version`, `owner`, and `severity` labels:
+
+1. **`HighHttpErrorRate`**: Triggers when 5xx errors exceed 5% of all requests over 1 minute.
+2. **`HighHttpLatencyP99`**: Triggers when p99 request latency exceeds 1000ms over 2 minutes.
+3. **`DailyDigestFailures`**: Triggers when daily digest email generation fails.
+
+---
+
+## 7. Grafana Dashboard Dynamic Filtering
+
+The pre-provisioned Grafana dashboard (`lifecycle-tracker-overview.json`) includes top-level dynamic template filters:
+- **`$environment`**: Populated via `label_values(deployment_environment)`.
+- **`$version`**: Populated via `label_values(service_version)`.
+
+All dashboard queries dynamically slice metrics by the selected environment and release version.

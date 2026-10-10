@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.routers import auth, dev, groups, health, items, reminders, users
+from app.telemetry import init_opentelemetry, setup_telemetry_middleware
 
 
 def create_app() -> FastAPI:
@@ -18,6 +19,9 @@ def create_app() -> FastAPI:
         ),
         version="1.0.0",
     )
+
+    init_opentelemetry(app)
+    setup_telemetry_middleware(app)
 
     app.add_middleware(
         CORSMiddleware,

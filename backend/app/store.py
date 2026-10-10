@@ -1088,6 +1088,24 @@ class DatabaseStore:
             )
             return [r.to_digest_email() for r in records]
 
+    def sync_metrics(self) -> None:
+        try:
+            from app.telemetry import update_lifecycle_items_gauge
+            with self.get_session() as session:
+                rows = (
+                    session.query(
+                        LifecycleItemModel.lifecycle_type,
+                        LifecycleItemModel.status,
+                        func.count(LifecycleItemModel.id),
+                    )
+                    .group_by(LifecycleItemModel.lifecycle_type, LifecycleItemModel.status)
+                    .all()
+                )
+                for l_type, status_val, cnt in rows:
+                    update_lifecycle_items_gauge(lifecycle_type=str(l_type), status=str(status_val), count=int(cnt))
+        except Exception:
+            pass
+
 
 # Aliases for backwards compatibility
 Store = DatabaseStore

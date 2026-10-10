@@ -12,6 +12,7 @@ from app.models import (
     User,
 )
 from app.store import DatabaseStore, get_store
+from app.telemetry import record_group_created, record_group_member_invited
 
 router = APIRouter()
 
@@ -30,7 +31,9 @@ async def create_group(
     current_user: User = Depends(get_current_user_optional),
     store: DatabaseStore = Depends(get_store),
 ) -> Group:
-    return store.create_group(user=current_user, name=payload.name)
+    group = store.create_group(user=current_user, name=payload.name)
+    record_group_created()
+    return group
 
 
 @router.get("/{id}", response_model=Group, status_code=status.HTTP_200_OK)
@@ -87,6 +90,7 @@ async def add_member(
         )
         if not updated_group:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+        record_group_member_invited()
         return updated_group
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))

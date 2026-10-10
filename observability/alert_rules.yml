@@ -1,0 +1,54 @@
+groups:
+  - name: application-critical-alerts
+    rules:
+      - alert: HighHttpErrorRate
+        expr: |
+          (
+            sum(rate(app_http_server_duration_milliseconds_count{http_status_code=~"5.."}[1m]))
+            /
+            sum(rate(app_http_server_duration_milliseconds_count[1m]))
+          ) * 100 > 5
+        for: 1m
+        labels:
+          severity: critical
+          service: "{{ $labels.service_name }}"
+          environment: "{{ $labels.deployment_environment }}"
+          version: "{{ $labels.service_version }}"
+          owner: backend-team
+        annotations:
+          summary: "Elevated HTTP 5xx error rate on {{ $labels.service_name }}"
+          description: "Service {{ $labels.service_name }} in {{ $labels.deployment_environment }} is experiencing a 5xx error rate of {{ $value | printf \"%.2f\" }}% (threshold: 5%)."
+          dashboard_url: "http://localhost:3004/d/lifecycle-tracker-overview?var-environment={{ $labels.deployment_environment }}&var-version={{ $labels.service_version }}"
+          runbook_url: "docs/telemetry.md#high-http-error-rate"
+
+      - alert: HighHttpLatencyP99
+        expr: |
+          histogram_quantile(0.99, sum(rate(app_http_server_duration_milliseconds_bucket[1m])) by (le, service_name, deployment_environment, service_version)) > 1000
+        for: 2m
+        labels:
+          severity: warning
+          service: "{{ $labels.service_name }}"
+          environment: "{{ $labels.deployment_environment }}"
+          version: "{{ $labels.service_version }}"
+          owner: backend-team
+        annotations:
+          summary: "Elevated p99 latency on {{ $labels.service_name }}"
+          description: "Service {{ $labels.service_name }} p99 latency exceeded 1000ms (current: {{ $value | printf \"%.2f\" }}ms)."
+          dashboard_url: "http://localhost:3004/d/lifecycle-tracker-overview?var-environment={{ $labels.deployment_environment }}&var-version={{ $labels.service_version }}"
+          runbook_url: "docs/telemetry.md#high-http-latency"
+
+      - alert: DailyDigestFailures
+        expr: |
+          sum(rate(app_digests_generated_total{status="failure"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: "{{ $labels.service_name }}"
+          environment: "{{ $labels.deployment_environment }}"
+          version: "{{ $labels.service_version }}"
+          owner: backend-team
+        annotations:
+          summary: "Failures detected in daily digest generation"
+          description: "Daily morning digest email generation experienced failures in {{ $labels.deployment_environment }}."
+          dashboard_url: "http://localhost:3004/d/lifecycle-tracker-overview?var-environment={{ $labels.deployment_environment }}&var-version={{ $labels.service_version }}"
+          runbook_url: "docs/telemetry.md#digest-failures"
