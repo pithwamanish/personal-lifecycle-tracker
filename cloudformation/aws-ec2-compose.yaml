@@ -1,0 +1,321 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Personal Lifecycle Tracker - Production EC2 Deployment with Docker Compose & Caddy reverse proxy.
+  Deploys a custom VPC, Public Subnet, Security Group, IAM Role with SSM access, and an EC2 instance
+  running the containerized PostgreSQL, FastAPI backend, and React/Caddy frontend.
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    Description: EC2 instance type (t3.micro or t4g.micro is Free Tier eligible).
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t4g.micro
+      - t4g.small
+      - t4g.medium
+      - m6i.large
+
+  AmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+    Description: Ubuntu 24.04 LTS AMI looked up dynamically from AWS SSM Public Parameter store.
+
+  KeyName:
+    Type: String
+    Default: ''
+    Description: Optional EC2 KeyPair name for SSH access (leave empty to use AWS Systems Manager Session Manager).
+
+  AllowedCIDR:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: The IP address range that can access the web application and SSH.
+
+  AppPort:
+    Type: Number
+    Default: 80
+    Description: Public host port mapped to the Caddy reverse proxy.
+
+  RepoUrl:
+    Type: String
+    Default: https://github.com/pithwamanish/personal-lifecycle-tracker.git
+    Description: Git repository containing the application code.
+
+  RepoBranch:
+    Type: String
+    Default: main
+    Description: Git branch to clone and deploy.
+
+  DatabasePassword:
+    Type: String
+    NoEcho: true
+    Default: ''
+    Description: Optional PostgreSQL password. If omitted, a secure 24-character password is automatically generated.
+
+Conditions:
+  HasKeyName: !Not [!Equals [!Ref KeyName, '']]
+
+Resources:
+  # ===========================================================================
+  # Networking: VPC, Subnet, Internet Gateway, Routing
+  # ===========================================================================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-vpc'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-igw'
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-subnet'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-rt'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # ===========================================================================
+  # Security Group
+  # ===========================================================================
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP, HTTPS, preview port and SSH access
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref AllowedCIDR
+          Description: HTTP web traffic
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref AllowedCIDR
+          Description: HTTPS web traffic
+        - IpProtocol: tcp
+          FromPort: 8088
+          ToPort: 8088
+          CidrIp: !Ref AllowedCIDR
+          Description: Alternate production preview port
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedCIDR
+          Description: SSH remote access
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-sg'
+
+  # ===========================================================================
+  # IAM Role & Instance Profile for AWS Systems Manager (SSM)
+  # ===========================================================================
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-ec2-ssm-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ssm-role'
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref InstanceRole
+
+  # ===========================================================================
+  # EC2 Instance
+  # ===========================================================================
+  AppInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref InstanceSecurityGroup
+      IamInstanceProfile: !Ref InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          exec > >(tee -a /var/log/app-bootstrap.log) 2>&1
+          echo "=== Provisioning Personal Lifecycle Tracker via CloudFormation at $(date) ==="
+
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -y
+          apt-get install -y --no-install-recommends ca-certificates curl gnupg git make jq
+
+          install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+          chmod a+r /etc/apt/keyrings/docker.gpg
+
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+          apt-get update -y
+          apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+          systemctl enable docker
+          systemctl start docker
+          usermod -aG docker ubuntu || true
+
+          APP_DIR="/opt/personal-lifecycle-tracker"
+          mkdir -p "$APP_DIR"
+
+          echo "Cloning ${RepoUrl} (${RepoBranch})..."
+          if [ -d "$APP_DIR/.git" ]; then
+              cd "$APP_DIR" && git pull origin "${RepoBranch}"
+          else
+              git clone --branch "${RepoBranch}" "${RepoUrl}" "$APP_DIR"
+          fi
+
+          cd "$APP_DIR"
+
+          DB_PASS="${DatabasePassword}"
+          if [ -z "$DB_PASS" ]; then
+              DB_PASS=$(openssl rand -hex 16)
+          fi
+
+          cat <<EOF > "$APP_DIR/.env"
+          PROD_PORT=${AppPort}
+          BACKEND_PORT=8003
+          FRONTEND_PORT=3003
+          POSTGRES_PORT=5434
+          APP_ENV=production
+          PYTHONUNBUFFERED=1
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=$DB_PASS
+          POSTGRES_DB=lifecycle
+          DATABASE_URL=postgresql://postgres:$DB_PASS@db:5432/lifecycle
+          CORS_ORIGINS=*
+          EOF
+
+          chmod 600 "$APP_DIR/.env"
+          chown -R ubuntu:ubuntu "$APP_DIR"
+
+          cat <<EOF > /etc/systemd/system/personal-lifecycle-tracker.service
+          [Unit]
+          Description=Personal Lifecycle Tracker Multi-Container Stack
+          After=docker.service network-online.target
+          Requires=docker.service
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          WorkingDirectory=$APP_DIR
+          ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml up -d --build
+          ExecStop=/usr/bin/docker compose -f docker-compose.prod.yml down
+          TimeoutStartSec=600
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+
+          systemctl daemon-reload
+          systemctl enable personal-lifecycle-tracker.service
+
+          docker compose -f docker-compose.prod.yml up -d --build
+
+          echo "=== Provisioning Complete at $(date) ==="
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ec2'
+
+  # ===========================================================================
+  # Elastic IP
+  # ===========================================================================
+  InstanceElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref AppInstance
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-eip'
+
+Outputs:
+  InstanceId:
+    Description: Instance ID of the provisioned EC2 container host
+    Value: !Ref AppInstance
+
+  PublicIP:
+    Description: Public Elastic IP address of the application
+    Value: !Ref InstanceElasticIP
+
+  ApplicationURL:
+    Description: Web Application entrypoint
+    Value: !Sub 'http://${InstanceElasticIP}:${AppPort}'
+
+  HealthCheckURL:
+    Description: Production Health Check endpoint
+    Value: !Sub 'http://${InstanceElasticIP}:${AppPort}/health'
+
+  SSMConnectCommand:
+    Description: AWS Systems Manager command to connect to instance shell without SSH key
+    Value: !Sub 'aws ssm start-session --target ${AppInstance} --region ${AWS::Region}'

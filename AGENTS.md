@@ -182,14 +182,39 @@ VITE_BACKEND_URL=http://backend:8000
 ```
 .
 ├── AGENTS.md                  # Project constitution & instructions
-├── Makefile                   # Docker Compose automation targets
+├── README.md                  # Project overview & documentation
+├── Makefile                   # Docker Compose & containerized IaC automation targets
+├── render.yaml                # Render Blueprint declarative 1-click deployment
 ├── docker-compose.yaml        # Development multi-app composition
 ├── docker-compose.prod.yml    # Production multi-stage Caddy composition
 ├── openapi.yaml               # Root API contract
 ├── contracts/
 │   └── openapi.yaml           # Frozen canonical contract
 ├── docs/
-│   └── spec.md                # Functional specification & scope
+│   ├── spec.md                # Functional specification & scope
+│   └── deployment/            # Production deployment playbooks & architecture
+│       ├── README.md          # Deployment index & decision matrix
+│       ├── render.md          # Render Blueprint & Terraform guide
+│       ├── aws-terraform.md   # AWS EC2 Docker Compose Terraform guide
+│       └── aws-cloudformation.md # AWS CloudFormation 1-click guide
+├── cloudformation/
+│   └── aws-ec2-compose.yaml   # AWS CloudFormation production template
+├── terraform/
+│   ├── aws/                   # AWS EC2 Docker Compose Terraform module
+│   │   ├── versions.tf
+│   │   ├── variables.tf
+│   │   ├── vpc.tf
+│   │   ├── security_groups.tf
+│   │   ├── iam.tf
+│   │   ├── user_data.sh       # Cloud-init bootstrapper
+│   │   ├── ec2.tf
+│   │   ├── eip.tf
+│   │   └── outputs.tf
+│   └── render/                # Render Terraform module (render-oss/render)
+│       ├── versions.tf
+│       ├── variables.tf
+│       ├── main.tf
+│       └── outputs.tf
 ├── backend/
 │   ├── Dockerfile             # Python 3.11 base image with healthchecks
 │   ├── requirements.txt       # Backend dependencies
@@ -214,4 +239,19 @@ VITE_BACKEND_URL=http://backend:8000
     └── spec-compliance.spec.ts# Comprehensive Section 6 acceptance journey
 ```
 
-regularly commit code to git 
+---
+
+## 7. Cloud Deployment Automation (AWS & Render)
+
+Execute all validations and formatting inside Docker without host dependencies:
+
+- **Render**:
+  - Declarative Blueprint: [`render.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.yaml)
+  - Terraform Module: [`terraform/render/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/render/)
+  - Validation: `make tf-validate-render`
+- **AWS**:
+  - Terraform Module: [`terraform/aws/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/aws/)
+  - CloudFormation: [`cloudformation/aws-ec2-compose.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose.yaml)
+  - Validation: `make tf-validate-aws` and `make cf-validate`
+
+regularly commit code to git

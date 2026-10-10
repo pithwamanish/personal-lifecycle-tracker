@@ -1,0 +1,11 @@
+aws_region        = "us-east-1"
+project_name      = "personal-lifecycle-tracker"
+environment       = "production"
+instance_type     = "t3.micro"
+app_port          = 80
+allowed_ssh_cidr  = "0.0.0.0/0"
+allowed_http_cidr = "0.0.0.0/0"
+repo_url          = "https://github.com/pithwamanish/personal-lifecycle-tracker.git"
+repo_branch       = "main"
+# key_name        = "my-aws-keypair"
+# postgres_password = "custom_strong_password"
