@@ -1,4 +1,4 @@
-.PHONY: dev build test test-backend test-frontend test-integration test-e2e lint down clean logs ps
+.PHONY: dev build test test-backend test-frontend test-integration test-e2e lint down clean logs ps ci-validate promote-validate
 
 dev:
 	docker compose up --build
@@ -124,5 +124,8 @@ cf-validate: cf-validate-dev cf-validate-prod
 
 ci-validate:
 	act -n -W .github/workflows/ci.yml
+
+promote-validate:
+	act -n -W .github/workflows/promote-dev-to-prod.yml
 
 

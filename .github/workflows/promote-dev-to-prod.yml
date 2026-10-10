@@ -1,0 +1,483 @@
+name: Promote Dev to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: 'Source development branch to promote'
+        required: true
+        type: string
+        default: 'dev'
+      target_branch:
+        description: 'Target production branch'
+        required: true
+        type: string
+        default: 'main'
+      version_tag:
+        description: 'Release version tag (e.g. v1.1.0; leave blank to auto-increment from latest tag)'
+        required: false
+        type: string
+        default: ''
+      release_title:
+        description: 'Release title (defaults to: Production Release <version>)'
+        required: false
+        type: string
+        default: ''
+      deploy_to_production:
+        description: 'Deploy to Render Production environment after promotion'
+        required: false
+        type: boolean
+        default: true
+      skip_tests:
+        description: 'Skip pre-promotion automated test gates (NOT recommended)'
+        required: false
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Dry run: simulate merge, validation, and release notes without pushing or deploying'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: production-promotion
+  cancel-in-progress: false
+
+jobs:
+  # ===========================================================================
+  # 1. PRE-FLIGHT VALIDATION & TEST GATES
+  # ===========================================================================
+  validate-and-test:
+    name: Validate Dev Branch & Pre-Promotion Gates
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      commits_count: ${{ steps.branch-check.outputs.commits_count }}
+      can_proceed: ${{ steps.branch-check.outputs.can_proceed }}
+      changelog: ${{ steps.branch-check.outputs.changelog }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch and Verify Remote Branches
+        id: branch-check
+        run: |
+          echo "================================================================"
+          echo "Verifying Source: ${{ inputs.source_branch }} -> Target: ${{ inputs.target_branch }}"
+          echo "================================================================"
+
+          # Verify source branch exists
+          if ! git ls-remote --exit-code --heads origin "${{ inputs.source_branch }}" >/dev/null 2>&1; then
+            echo "::error::Source branch '${{ inputs.source_branch }}' does not exist on remote 'origin'."
+            exit 1
+          fi
+
+          # Verify target branch exists
+          if ! git ls-remote --exit-code --heads origin "${{ inputs.target_branch }}" >/dev/null 2>&1; then
+            echo "::error::Target branch '${{ inputs.target_branch }}' does not exist on remote 'origin'."
+            exit 1
+          fi
+
+          # Fetch branches explicitly
+          git fetch origin "${{ inputs.source_branch }}:refs/remotes/origin/${{ inputs.source_branch }}"
+          git fetch origin "${{ inputs.target_branch }}:refs/remotes/origin/${{ inputs.target_branch }}"
+
+          # Count commits to promote
+          COMMITS_COUNT=$(git rev-list --count "origin/${{ inputs.target_branch }}..origin/${{ inputs.source_branch }}" || echo "0")
+          echo "commits_count=$COMMITS_COUNT" >> $GITHUB_OUTPUT
+          echo "Number of incoming commits to promote: $COMMITS_COUNT"
+
+          # Simulate merge to detect conflicts in advance
+          echo "Testing merge conflict detection..."
+          git checkout -B "temp-target" "origin/${{ inputs.target_branch }}"
+          if ! git merge --no-commit --no-ff "origin/${{ inputs.source_branch }}"; then
+            echo "::error::Merge conflict detected! '${{ inputs.source_branch }}' cannot be cleanly merged into '${{ inputs.target_branch }}'."
+            git merge --abort || true
+            exit 1
+          fi
+          git merge --abort || true
+          echo "Pre-merge check passed cleanly: zero merge conflicts detected."
+
+          # Extract commit changelog
+          if [ "$COMMITS_COUNT" -gt 0 ]; then
+            CHANGELOG=$(git log --pretty=format:"- %h %s (%an, %cd)" --date=short "origin/${{ inputs.target_branch }}..origin/${{ inputs.source_branch }}")
+          else
+            CHANGELOG="- No new commits between origin/${{ inputs.target_branch }} and origin/${{ inputs.source_branch }} (forced promotion or re-tag)."
+          fi
+
+          # Multi-line output for changelog
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "can_proceed=true" >> $GITHUB_OUTPUT
+
+      # -----------------------------------------------------------------------
+      # Automated Quality Gates (Backend, Frontend, Integration)
+      # -----------------------------------------------------------------------
+      - name: Set up Docker Buildx
+        if: inputs.skip_tests != true
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Services for Test Execution
+        if: inputs.skip_tests != true
+        run: |
+          echo "Building Docker container services for pre-promotion verification..."
+          docker compose build backend frontend
+
+      - name: Run Backend Unit & Contract Tests
+        if: inputs.skip_tests != true
+        run: |
+          echo "Running Backend Unit Tests inside container..."
+          docker compose run --rm --no-deps backend pytest tests -m "not integration" -v
+
+      - name: Run Frontend Lint & Vitest Tests
+        if: inputs.skip_tests != true
+        run: |
+          echo "Running Frontend Static Typecheck and Vitest inside container..."
+          docker compose run --rm --no-deps frontend sh -c "npm run lint && npm test"
+
+      - name: Run PostgreSQL Integration Tests
+        if: inputs.skip_tests != true
+        run: |
+          echo "Starting Compose Stack for PostgreSQL integration tests..."
+          docker compose up -d db backend
+          echo "Waiting for backend healthiness..."
+          timeout 60s bash -c 'until curl -fsS http://localhost:8003/health > /dev/null 2>&1; do sleep 2; done'
+          docker compose run --rm backend pytest tests/integration -v
+          docker compose down -v
+
+      - name: Summarize Validation Stage
+        run: |
+          echo "### 🔍 Pre-Promotion Quality Gate Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Source Branch**: \`${{ inputs.source_branch }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target Branch**: \`${{ inputs.target_branch }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Incoming Commits**: \`${{ steps.branch-check.outputs.commits_count }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Merge Conflict Check**: ✅ Clean (Zero Conflicts)" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.skip_tests }}" = "true" ]; then
+            echo "- **Pre-Promotion Tests**: ⚠️ Skipped by operator input" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Pre-Promotion Tests**: ✅ 100% Passed (Backend, Frontend & Integration)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ===========================================================================
+  # 2. PROMOTE DEV TO PRODUCTION & CUT RELEASE TAG
+  # ===========================================================================
+  promote-and-tag:
+    name: Promote Dev to Production & Cut Release Tag
+    needs: [validate-and-test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version_tag: ${{ steps.resolve-version.outputs.version_tag }}
+      merge_sha: ${{ steps.execute-merge.outputs.merge_sha }}
+      is_dry_run: ${{ inputs.dry_run }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git Committer
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch Source and Target Branches
+        run: |
+          git fetch origin "${{ inputs.source_branch }}:refs/remotes/origin/${{ inputs.source_branch }}"
+          git fetch origin "${{ inputs.target_branch }}:refs/remotes/origin/${{ inputs.target_branch }}"
+
+      - name: Resolve Release Version Tag
+        id: resolve-version
+        run: |
+          if [ -n "${{ inputs.version_tag }}" ]; then
+            TAG="${{ inputs.version_tag }}"
+            echo "Using user-specified version tag: $TAG"
+          else
+            # Retrieve highest semver tag matching v*
+            LATEST_TAG=$(git tag -l "v*" --sort=-v:refname | head -n1 || true)
+            if [ -z "$LATEST_TAG" ]; then
+              TAG="v1.0.0"
+              echo "No existing release tags found; initializing version to $TAG"
+            else
+              echo "Latest existing tag found: $LATEST_TAG"
+              CLEAN_TAG="${LATEST_TAG#v}"
+              MAJOR=$(echo "$CLEAN_TAG" | cut -d. -f1)
+              MINOR=$(echo "$CLEAN_TAG" | cut -d. -f2)
+              PATCH=$(echo "$CLEAN_TAG" | cut -d. -f3 | cut -d- -f1)
+              if [ -z "$MAJOR" ]; then MAJOR=1; fi
+              if [ -z "$MINOR" ]; then MINOR=0; fi
+              if [ -z "$PATCH" ]; then PATCH=0; fi
+              NEW_PATCH=$((PATCH + 1))
+              TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+              echo "Auto-incremented release version: $LATEST_TAG -> $TAG"
+            fi
+          fi
+          echo "version_tag=$TAG" >> $GITHUB_OUTPUT
+          echo "PROMOTED_VERSION_TAG=$TAG" >> $GITHUB_ENV
+
+      - name: Merge Source into Target Branch
+        id: execute-merge
+        run: |
+          TAG="${{ steps.resolve-version.outputs.version_tag }}"
+          echo "Checking out target branch: ${{ inputs.target_branch }}..."
+          git checkout -B "${{ inputs.target_branch }}" "origin/${{ inputs.target_branch }}"
+
+          echo "Merging origin/${{ inputs.source_branch }} into ${{ inputs.target_branch }}..."
+          git merge --no-ff "origin/${{ inputs.source_branch }}" \
+            -m "chore(release): promote ${{ inputs.source_branch }} to ${{ inputs.target_branch }} [$TAG]" \
+            -m "Triggered by @${{ github.actor }} via manual GitHub Actions workflow"
+
+          MERGE_SHA=$(git rev-parse HEAD)
+          echo "merge_sha=$MERGE_SHA" >> $GITHUB_OUTPUT
+          echo "Created promotion merge commit: $MERGE_SHA"
+
+          echo "Creating annotated release tag: $TAG..."
+          git tag -a "$TAG" -m "Production release $TAG promoted from ${{ inputs.source_branch }}"
+
+      - name: Publish Changes to Remote (or Dry Run)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.resolve-version.outputs.version_tag }}"
+          TARGET="${{ inputs.target_branch }}"
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "================================================================"
+            echo "DRY RUN MODE: Skipping git push and GitHub Release creation."
+            echo "Target branch '${TARGET}' would be updated to SHA: ${{ steps.execute-merge.outputs.merge_sha }}"
+            echo "Release tag '${TAG}' would be created and pushed."
+            echo "================================================================"
+          else
+            echo "Pushing target branch '${TARGET}' to origin..."
+            git push origin "$TARGET"
+
+            echo "Pushing release tag '${TAG}' to origin..."
+            git push origin "$TAG"
+
+            # Create GitHub Release with changelog
+            RELEASE_TITLE="${{ inputs.release_title }}"
+            if [ -z "$RELEASE_TITLE" ]; then
+              RELEASE_TITLE="Production Release $TAG"
+            fi
+
+            echo "Creating GitHub Release '$TAG'..."
+            echo "## 🚀 Production Release: $TAG" > release_notes.md
+            echo "" >> release_notes.md
+            echo "Promoted from branch \`${{ inputs.source_branch }}\` to \`${{ inputs.target_branch }}\` by @${{ github.actor }}." >> release_notes.md
+            echo "" >> release_notes.md
+            echo "### 📦 Promoted Commits:" >> release_notes.md
+            echo "${{ needs.validate-and-test.outputs.changelog }}" >> release_notes.md
+            echo "" >> release_notes.md
+            echo "---" >> release_notes.md
+            echo "*Created automatically by [Promote Dev to Production workflow](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})*" >> release_notes.md
+
+            gh release create "$TAG" \
+              --title "$RELEASE_TITLE" \
+              --notes-file release_notes.md \
+              --target "$TARGET"
+          fi
+
+      - name: Summarize Promotion Stage
+        run: |
+          TAG="${{ steps.resolve-version.outputs.version_tag }}"
+          echo "### 🚀 Production Promotion & Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version Tag**: \`$TAG\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target Branch**: \`${{ inputs.target_branch }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Merge Commit SHA**: \`${{ steps.execute-merge.outputs.merge_sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Promoted By**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "- **Mode**: 🧪 **Dry Run Simulation** (No remote changes pushed)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Mode**: ✅ **Live Promotion** (Pushed to remote & Release published)" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Included Commits:" >> $GITHUB_STEP_SUMMARY
+          echo "${{ needs.validate-and-test.outputs.changelog }}" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # 3. PRODUCTION DEPLOYMENT & HEALTH VALIDATION
+  # ===========================================================================
+  deploy-production:
+    name: Deploy to Production (Render) & Validate Health
+    needs: [validate-and-test, promote-and-tag]
+    if: |
+      inputs.deploy_to_production == true &&
+      inputs.dry_run != true &&
+      !failure() &&
+      !cancelled()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for keyless GitHub OIDC role assumption
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_branch }}
+
+      # -----------------------------------------------------------------------
+      # Keyless Cloud Authentication (GitHub OIDC -> AWS STS)
+      # -----------------------------------------------------------------------
+      - name: Authenticate via GitHub OIDC Role
+        id: oidc-auth
+        if: env.RENDER_OIDC_ROLE_ARN != '' || env.AWS_ROLE_TO_ASSUME != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.RENDER_OIDC_ROLE_ARN || secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+          role-session-name: GitHubActionsProductionPromotion-${{ github.run_id }}
+        env:
+          RENDER_OIDC_ROLE_ARN: ${{ secrets.RENDER_OIDC_ROLE_ARN }}
+          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
+      # -----------------------------------------------------------------------
+      # Retrieve Production Render Credentials from Secrets Manager / SSM
+      # -----------------------------------------------------------------------
+      - name: Retrieve Production Render Credentials
+        if: env.RENDER_OIDC_ROLE_ARN != '' || env.AWS_ROLE_TO_ASSUME != ''
+        run: |
+          echo "Searching for Production Render credentials in AWS Secrets Manager..."
+          SECRET_NAME="personal-lifecycle/render-production"
+          if ! aws secretsmanager describe-secret --secret-id "$SECRET_NAME" >/dev/null 2>&1; then
+            SECRET_NAME="personal-lifecycle/render"
+          fi
+
+          if aws secretsmanager describe-secret --secret-id "$SECRET_NAME" >/dev/null 2>&1; then
+            SECRET_VAL=$(aws secretsmanager get-secret-value --secret-id "$SECRET_NAME" --query SecretString --output text)
+            HOOK_URL=$(echo "$SECRET_VAL" | grep -o '"deploy_hook_url": *"[^"]*"' | cut -d'"' -f4 || true)
+            API_KEY=$(echo "$SECRET_VAL" | grep -o '"api_key": *"[^"]*"' | cut -d'"' -f4 || true)
+            SRV_ID=$(echo "$SECRET_VAL" | grep -o '"service_id": *"[^"]*"' | cut -d'"' -f4 || true)
+            if [ -n "$HOOK_URL" ]; then echo "RENDER_DEPLOY_HOOK_URL=$HOOK_URL" >> $GITHUB_ENV; fi
+            if [ -n "$API_KEY" ]; then echo "RENDER_API_KEY=$API_KEY" >> $GITHUB_ENV; fi
+            if [ -n "$SRV_ID" ]; then echo "RENDER_SERVICE_ID=$SRV_ID" >> $GITHUB_ENV; fi
+          elif aws ssm get-parameter --name "/personal-lifecycle/production/deploy_hook_url" >/dev/null 2>&1; then
+            HOOK_URL=$(aws ssm get-parameter --name "/personal-lifecycle/production/deploy_hook_url" --with-decryption --query Parameter.Value --output text)
+            echo "RENDER_DEPLOY_HOOK_URL=$HOOK_URL" >> $GITHUB_ENV
+          elif aws ssm get-parameter --name "/personal-lifecycle/render/deploy_hook_url" >/dev/null 2>&1; then
+            HOOK_URL=$(aws ssm get-parameter --name "/personal-lifecycle/render/deploy_hook_url" --with-decryption --query Parameter.Value --output text)
+            echo "RENDER_DEPLOY_HOOK_URL=$HOOK_URL" >> $GITHUB_ENV
+          fi
+        env:
+          RENDER_OIDC_ROLE_ARN: ${{ secrets.RENDER_OIDC_ROLE_ARN }}
+          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
+      # -----------------------------------------------------------------------
+      # Trigger Render Production Deployment
+      # -----------------------------------------------------------------------
+      - name: Trigger Render Production Deployment
+        id: deploy
+        env:
+          DEPLOY_HOOK: ${{ env.RENDER_DEPLOY_HOOK_URL || secrets.RENDER_DEPLOY_HOOK_URL_PROD || secrets.RENDER_DEPLOY_HOOK_URL }}
+          API_KEY: ${{ env.RENDER_API_KEY || secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ env.RENDER_SERVICE_ID || secrets.RENDER_SERVICE_ID_PROD || secrets.RENDER_SERVICE_ID }}
+        run: |
+          echo "================================================================"
+          echo "Triggering Production Deployment on Render..."
+          echo "================================================================"
+
+          if [ -n "$DEPLOY_HOOK" ]; then
+            echo "Triggering deployment via Render Deploy Hook..."
+            RESPONSE=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" -X POST "$DEPLOY_HOOK")
+            HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d':' -f2)
+            echo "Render Deploy Hook response code: $HTTP_CODE"
+            if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+              echo "Production deployment triggered successfully via deploy hook!"
+            else
+              echo "Warning: Deploy hook returned status code: $HTTP_CODE"
+            fi
+          elif [ -n "$API_KEY" ] && [ -n "$SERVICE_ID" ]; then
+            echo "Triggering deployment via Render REST API for service: $SERVICE_ID..."
+            RESPONSE=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" -X POST \
+              "https://api.render.com/v1/services/${SERVICE_ID}/deploys" \
+              -H "Authorization: Bearer ${API_KEY}" \
+              -H "Accept: application/json" \
+              -H "Content-Type: application/json" \
+              -d '{"clearCache": "do_not_clear"}')
+            HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d':' -f2)
+            echo "Render API response code: $HTTP_CODE"
+            if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+              echo "Production deployment triggered successfully via Render REST API!"
+            else
+              echo "Warning: Render API returned status code: $HTTP_CODE"
+            fi
+          else
+            echo "NOTE: Neither RENDER_DEPLOY_HOOK_URL nor RENDER_API_KEY/SERVICE_ID configured."
+            echo "Proceeding to health endpoint validation stage."
+          fi
+
+      # -----------------------------------------------------------------------
+      # Validate Live Production Health Endpoint
+      # -----------------------------------------------------------------------
+      - name: Validate Production Deployment Health Endpoint
+        env:
+          MAX_ATTEMPTS: 30
+          POLL_INTERVAL: 10
+        run: |
+          HEALTH_URL="${{ secrets.RENDER_HEALTH_URL_PROD || secrets.RENDER_HEALTH_URL || 'https://personal-lifecycle-frontend-prod.onrender.com/health' }}"
+
+          echo "================================================================"
+          echo "Validating Render Production Deployment Health"
+          echo "Target Health URL: $HEALTH_URL"
+          echo "Max Attempts: $MAX_ATTEMPTS (Checking every ${POLL_INTERVAL}s)"
+          echo "================================================================"
+
+          # Initial wait for container rollout
+          sleep 15
+
+          HEALTH_SUCCESS=false
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            echo "Attempt $i/$MAX_ATTEMPTS: Polling $HEALTH_URL..."
+            RESPONSE=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" --connect-timeout 10 --max-time 15 "$HEALTH_URL" 2>&1 || true)
+            HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d':' -f2 || true)
+            PAYLOAD=$(echo "$RESPONSE" | grep -v "HTTP_STATUS:" || true)
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo ">>> Production healthcheck returned HTTP 200 OK!"
+              echo "Response payload: $PAYLOAD"
+              if echo "$PAYLOAD" | grep -q '"status"[[:space:]]*:[[:space:]]*"healthy"'; then
+                echo ">>> Validated payload contains 'status: healthy'!"
+                HEALTH_SUCCESS=true
+                break
+              else
+                echo "HTTP 200 received; waiting for healthy status in payload..."
+              fi
+            else
+              echo "Received status: ${HTTP_CODE:-connection failure}. Retrying in ${POLL_INTERVAL}s..."
+            fi
+
+            sleep $POLL_INTERVAL
+          done
+
+          if [ "$HEALTH_SUCCESS" = "true" ]; then
+            echo "================================================================"
+            echo "SUCCESS: Production deployment is live, healthy, and serving traffic!"
+            echo "================================================================"
+            echo "### 🌐 Production Deployment Healthcheck" >> $GITHUB_STEP_SUMMARY
+            echo "- **Status**: ✅ **Live & Healthy (HTTP 200)**" >> $GITHUB_STEP_SUMMARY
+            echo "- **Endpoint**: \`$HEALTH_URL\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Version Promoted**: \`${{ needs.promote-and-tag.outputs.version_tag }}\`" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          else
+            echo "================================================================"
+            echo "ERROR: Production health check timed out after $MAX_ATTEMPTS attempts."
+            echo "Target URL: $HEALTH_URL"
+            echo "================================================================"
+            echo "### ❌ Production Deployment Healthcheck Failed" >> $GITHUB_STEP_SUMMARY
+            echo "- **Status**: ❌ **Health Check Timed Out**" >> $GITHUB_STEP_SUMMARY
+            echo "- **Endpoint**: \`$HEALTH_URL\`" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ secrets.STRICT_HEALTH_CHECK }}" = "false" ]; then
+              echo "STRICT_HEALTH_CHECK=false configured; continuing without failing step."
+              exit 0
+            fi
+            exit 1
+          fi

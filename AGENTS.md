@@ -184,6 +184,10 @@ VITE_BACKEND_URL=http://backend:8000
 ├── AGENTS.md                  # Project constitution & instructions
 ├── README.md                  # Project overview & documentation
 ├── Makefile                   # Docker Compose & containerized IaC automation targets
+├── .github/
+│   └── workflows/
+│       ├── ci.yml             # Automated CI/CD pipeline (tests, compose e2e, render deploy)
+│       └── promote-dev-to-prod.yml # Manual dev-to-production promotion & release workflow
 ├── render.yaml                # Render Blueprint declarative 1-click deployment
 ├── docker-compose.yaml        # Development multi-app composition
 ├── docker-compose.prod.yml    # Production multi-stage Caddy composition

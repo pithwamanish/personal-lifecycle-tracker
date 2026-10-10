@@ -133,6 +133,14 @@ The automated GitHub Actions workflow ([`.github/workflows/ci.yml`](file:///home
 
 For configuration and secrets setup, see the [CI/CD Pipeline Guide](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/ci-cd.md).
 
+### Dev to Production Promotion Workflow
+
+A manual GitHub Actions workflow ([`.github/workflows/promote-dev-to-prod.yml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/.github/workflows/promote-dev-to-prod.yml)) promotes verified versions from `dev` to the production branch (`main`):
+- **Pre-Flight Conflict & Test Gates**: Verifies zero merge conflicts, then executes backend tests, frontend lint & Vitest, and PostgreSQL integration tests in Docker.
+- **Automated SemVer Tagging & Release**: Merges `dev` into `main`, auto-increments semantic version tags (e.g., `v1.0.0` → `v1.0.1` or accepts custom tag), compiles release notes, tags the commit, and cuts a GitHub Release.
+- **Live Production Deployment**: Deploys the production Render environment and polls the live health endpoint until HTTP 200 `"status": "healthy"` is confirmed.
+- **Dry-Run Capability**: Operators can simulate promotion, tests, and changelog generation safely without pushing commits or deploying.
+
 ---
 
 ## Testing & Verification

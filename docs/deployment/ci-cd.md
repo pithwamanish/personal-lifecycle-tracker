@@ -160,3 +160,98 @@ rtk act -j test-frontend -W .github/workflows/ci.yml
 - [x] GitHub OIDC role assumption exchanges temporary credentials without static keys.
 - [x] Render deployment triggered via Deploy Hook or REST API.
 - [x] Health check polling loop validates live HTTP 200 and `"status": "healthy"`.
+
+---
+
+## 7. Dev to Production Manual Promotion Workflow (`promote-dev-to-prod.yml`)
+
+The repository includes a dedicated manual promotion workflow ([`.github/workflows/promote-dev-to-prod.yml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/.github/workflows/promote-dev-to-prod.yml)) designed to promote verified development versions from `dev` to the production branch (`main`), cut semantic release tags, compile release notes, and deploy directly to the production Render environment.
+
+### A. Promotion Workflow Architecture
+
+```mermaid
+flowchart TD
+    Operator["Operator\n(workflow_dispatch)"] --> Inputs["Inputs:\n- source_branch (dev)\n- target_branch (main)\n- version_tag (optional)\n- deploy_to_production (bool)\n- dry_run (bool)"]
+
+    subgraph Phase1["Phase 1: Pre-Flight Validation & Quality Gates"]
+        direction TB
+        BranchVerify["Verify Remote Branches Exist & Fetch"]
+        CommitCount["Count Commits Ahead & Extract Diff"]
+        MergeConflictCheck["Simulate Merge (Zero Conflict Validation)"]
+        TestGates["Containerized Test Gates:\n- Backend Unit Tests (Pytest)\n- Frontend Lint & Vitest\n- PostgreSQL Integration Tests"]
+
+        BranchVerify --> CommitCount --> MergeConflictCheck --> TestGates
+    end
+
+    subgraph Phase2["Phase 2: Promotion, SemVer & Release"]
+        direction TB
+        ResolveTag["Resolve Version Tag (Auto SemVer / Custom Tag)"]
+        ExecMerge["Merge dev -> main (--no-ff with Release Metadata)"]
+        GitTag["Create Annotated Tag (vX.Y.Z)"]
+        GitPush["Push main Branch & Tag to Remote"]
+        GHRelease["Create GitHub Release with Changelog Notes"]
+
+        ResolveTag --> ExecMerge --> GitTag --> GitPush --> GHRelease
+    end
+
+    subgraph Phase3["Phase 3: Production Deployment & Health Verification"]
+        direction TB
+        OIDCAuth["Keyless OIDC Auth (AWS IAM Role Assumption)"]
+        FetchProdSecrets["Retrieve Production Secrets (personal-lifecycle/render-production)"]
+        TriggerProd["Trigger Render Production Deployment (Deploy Hook / REST API)"]
+        PollProdHealth["Poll Live Health Endpoint (30 attempts / 10s intervals)\nValidate HTTP 200 & 'status: healthy'"]
+
+        OIDCAuth --> FetchProdSecrets --> TriggerProd --> PollProdHealth
+    end
+
+    Inputs --> Phase1
+    Phase1 --> Phase2
+    Phase2 --> Phase3
+```
+
+### B. Workflow Dispatch Inputs Reference
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `source_branch` | `string` | `dev` | Source development branch containing verified commits to promote. |
+| `target_branch` | `string` | `main` | Target production branch receiving the release merge. |
+| `version_tag` | `string` | `""` | Specific release tag (e.g. `v1.1.0`). If left blank, the workflow automatically increments the patch version from the latest tag (e.g., `v1.0.0` → `v1.0.1`). |
+| `release_title` | `string` | `""` | Custom GitHub Release title (defaults to `Production Release <version>`). |
+| `deploy_to_production` | `boolean` | `true` | Immediately triggers deployment to the Render Production environment after branch push. |
+| `skip_tests` | `boolean` | `false` | Bypasses automated test gates before promotion (**strongly discouraged** for production releases). |
+| `dry_run` | `boolean` | `false` | Simulates branch merge, test execution, tag calculation, and changelog generation without pushing to remote or triggering production deployment. |
+
+### C. Execution Safeguards
+
+1. **Strict Concurrency Lock**:
+   - Uses `concurrency: group: production-promotion` with `cancel-in-progress: false` to prevent multiple operators from triggering overlapping promotion merges.
+2. **Pre-Merge Conflict Detection**:
+   - Before executing any branch changes or test suites, the workflow runs a simulated merge in a detached branch. If any merge conflicts exist between `dev` and `main`, the workflow halts immediately with an actionable error.
+3. **Automated SemVer Patch Calculation**:
+   - If no explicit `version_tag` is supplied, the workflow queries `git tag -l "v*" --sort=-v:refname` and calculates the next semantic patch version automatically (or seeds `v1.0.0`).
+4. **Rich Step Summaries**:
+   - Both validation, promotion, and deployment stages output formatted Markdown summaries directly to `$GITHUB_STEP_SUMMARY` detailing commit SHAs, author metadata, changelog entries, and live endpoint response codes.
+
+### D. How to Trigger via GitHub CLI or Web UI
+
+**Via GitHub Web UI**:
+1. Navigate to **Actions > Promote Dev to Production**.
+2. Click **Run workflow**.
+3. Select `source_branch: dev`, `target_branch: main`, and optionally provide a `version_tag`.
+4. Click **Run workflow**.
+
+**Via GitHub CLI (`gh`)**:
+```bash
+# Run promotion in dry-run mode (simulation only)
+gh workflow run promote-dev-to-prod.yml -f source_branch=dev -f dry_run=true
+
+# Run full live promotion to production with auto-incremented SemVer
+gh workflow run promote-dev-to-prod.yml -f source_branch=dev -f target_branch=main
+
+# Run promotion with a specific version tag and custom release title
+gh workflow run promote-dev-to-prod.yml \
+  -f source_branch=dev \
+  -f target_branch=main \
+  -f version_tag=v1.1.0 \
+  -f release_title="Production Release v1.1.0 (Q4 Feature Milestone)"
+```
