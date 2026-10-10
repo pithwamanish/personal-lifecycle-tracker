@@ -1,1 +1,0 @@
-../_docs/telemetry.md
