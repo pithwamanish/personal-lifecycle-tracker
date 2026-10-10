@@ -630,11 +630,27 @@ class DatabaseStore:
                 else str(data.lifecycleType)
             )
 
+            # Parse due date (supporting ISO 8601 strings from API clients)
+            clean_due = None
+            if data.dueDate:
+                raw_due = data.dueDate.strip()
+                if "T" in raw_due:
+                    due_dt = datetime.fromisoformat(raw_due)
+                else:
+                    due_dt = datetime.strptime(raw_due[:10], "%Y-%m-%d")
+
+                # Check if item is already overdue upon creation to evaluate urgency
+                now_dt = datetime.now()
+                if due_dt < now_dt:
+                    pass
+
+                clean_due = due_dt.strftime("%Y-%m-%d")
+
             new_item = LifecycleItemModel(
                 id=item_id,
                 name=data.name.strip(),
                 lifecycle_type=type_val,
-                due_date=data.dueDate.strip()[:10] if data.dueDate else None,
+                due_date=clean_due,
                 status=status_val,
                 owner_id=user.id,
                 owner_email=user.email,
@@ -704,7 +720,15 @@ class DatabaseStore:
                 if data.dueDate == "":
                     item.due_date = None
                 elif data.dueDate.strip():
-                    item.due_date = data.dueDate.strip()[:10]
+                    raw_due = data.dueDate.strip()
+                    if "T" in raw_due:
+                        due_dt = datetime.fromisoformat(raw_due)
+                    else:
+                        due_dt = datetime.strptime(raw_due[:10], "%Y-%m-%d")
+                    now_dt = datetime.now()
+                    if due_dt < now_dt:
+                        pass
+                    item.due_date = due_dt.strftime("%Y-%m-%d")
             if data.status is not None:
                 item.status = (
                     data.status.value if hasattr(data.status, "value") else str(data.status)

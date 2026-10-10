@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Reproduce the bug by sending a lifecycle item creation request with an ISO 8601 timestamp with timezone.
+# Existing tests only send "YYYY-MM-DD" date strings, which succeed.
+# But requests with ISO 8601 strings (e.g. "2026-11-20T00:00:00Z") fail with:
+#   TypeError: can't compare offset-naive and offset-aware datetimes
+# returning HTTP 500 and incrementing app_item_creation_failures_total and HTTP 5xx error rate.
+
+BACKEND_URL="${BACKEND_URL:-http://localhost:8003}"
+MODE="${1:-single}"
+
+echo "================================================================"
+echo "    REPRODUCE REALISTIC BUG: OFFSET-NAIVE VS OFFSET-AWARE DATE  "
+echo "================================================================"
+echo "Backend URL: ${BACKEND_URL}"
+echo "Mode:        ${MODE}"
+echo ""
+
+if [ "$MODE" = "--burst" ] || [ "$MODE" = "burst" ]; then
+  COUNT="${2:-15}"
+  echo "==> Sending burst of ${COUNT} requests with ISO 8601 timestamps to breach alert threshold..."
+  for i in $(seq 1 "$COUNT"); do
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${BACKEND_URL}/api/v1/items" \
+      -H "Content-Type: application/json" \
+      -d "{\"name\": \"Burst ISO Bug Item $i\", \"lifecycleType\": \"renewal\", \"dueDate\": \"2026-11-20T00:00:00Z\"}")
+    echo "  [Request $i/$COUNT] HTTP ${STATUS}"
+    sleep 0.5
+  done
+  echo ""
+  echo "==> Burst complete. Check Prometheus metrics:"
+  echo "    curl -s ${BACKEND_URL}/metrics | grep -E '(app_item_creation_failures_total|http_status_code=\"500\")'"
+  echo "==> Check Prometheus alerts at http://localhost:9091/api/v1/alerts"
+  echo "==> Poll alerts via: python3 on-call-engineer/poll-alerts.py --once"
+  exit 0
+fi
+
+echo "==> 1. Testing normal request with date-only string (existing test style: YYYY-MM-DD)..."
+NORMAL_RESP=$(curl -s -w "\nHTTP_STATUS: %{http_code}\n" -X POST "${BACKEND_URL}/api/v1/items" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Normal Date Item", "lifecycleType": "renewal", "dueDate": "2026-11-20"}')
+echo "${NORMAL_RESP}"
+
+echo "==> 2. Testing request with ISO 8601 timestamp with timezone (bug trigger: YYYY-MM-DDTHH:mm:ssZ)..."
+BUG_RESP=$(curl -s -w "\nHTTP_STATUS: %{http_code}\n" -X POST "${BACKEND_URL}/api/v1/items" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Health Insurance ISO Renewal", "lifecycleType": "renewal", "dueDate": "2026-11-20T00:00:00Z"}')
+echo "${BUG_RESP}"
+
+echo "================================================================"
+echo "  REPRODUCTION COMPLETE"
+echo "  Normal request returned HTTP 201 (passes existing tests)."
+echo "  ISO timestamp request returned HTTP 500 (reproduces bug)."
+echo "================================================================"
