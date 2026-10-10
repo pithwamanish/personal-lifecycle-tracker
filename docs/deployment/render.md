@@ -1,8 +1,9 @@
 # Deploying Personal Lifecycle Tracker to Render
 
-[Render](https://render.com) is a modern cloud Application Platform-as-a-Service (PaaS). This guide details two automated ways to deploy the Personal Lifecycle Tracker:
+[Render](https://render.com) is a modern cloud Application Platform-as-a-Service (PaaS). This guide details three automated ways to deploy the Personal Lifecycle Tracker:
 1. **Option A (Recommended)**: Render Blueprint (`render.yaml`) — 1-click declarative Git deployment.
 2. **Option B**: Terraform (`terraform/render/`) — Infrastructure as Code management using the Render Terraform Provider.
+3. **Option C**: GitHub Actions CI/CD Pipeline (`.github/workflows/ci.yml`) — Automated test-gated deployment with GitHub OIDC role authentication and health endpoint verification.
 
 ---
 
@@ -108,6 +109,22 @@ If your team manages infrastructure via Terraform, you can use the official Rend
    - `backend_url`
    - `frontend_url`
    - `application_health_url`
+
+---
+
+## Option C: GitHub Actions CI/CD with GitHub OIDC Role (`.github/workflows/ci.yml`)
+
+For complete continuous delivery with zero hardcoded long-lived secrets, use the GitHub Actions CI/CD pipeline:
+
+1. **Parallel Automated Tests**: Runs backend Pytest and frontend Vitest unit test suites simultaneously.
+2. **Containerized E2E Verification**: Builds the multi-container Docker Compose stack, validates PostgreSQL integration tests, and runs the 17-scenario Playwright E2E suite.
+3. **Keyless Cloud Authentication**:
+   - Uses GitHub OIDC (`permissions: id-token: write`) to assume an AWS IAM role (`terraform/aws/oidc.tf`).
+   - Retrieves Render Deploy Hook or API credentials dynamically from AWS Secrets Manager (`personal-lifecycle/render`).
+4. **Trigger Deployment**: Automatically calls Render's deploy hook or REST API to trigger a rollout.
+5. **Healthcheck Verification**: Polling loop verifies `https://<frontend-subdomain>.onrender.com/health` returns HTTP 200 with `"status": "healthy"` before completing the pipeline.
+
+For detailed secrets and setup instructions, see the [CI/CD Pipeline Guide](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/ci-cd.md).
 
 ---
 

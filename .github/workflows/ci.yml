@@ -1,0 +1,259 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy_to_render:
+        description: 'Deploy to Render after test passage'
+        required: false
+        type: boolean
+        default: true
+      render_health_url:
+        description: 'Custom Health Endpoint URL to validate'
+        required: false
+        type: string
+        default: ''
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # ===========================================================================
+  # 1. PARALLEL TESTS: Backend Unit & Contract Tests
+  # ===========================================================================
+  test-backend:
+    name: Backend Tests (FastAPI & Pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Backend Image
+        run: |
+          docker compose build backend
+
+      - name: Run Backend Unit Tests (Pytest)
+        run: |
+          docker compose run --rm --no-deps backend pytest tests -m "not integration" -v
+
+  # ===========================================================================
+  # 1. PARALLEL TESTS: Frontend Lint & Vitest Suite
+  # ===========================================================================
+  test-frontend:
+    name: Frontend Tests (React & Vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Frontend Image
+        run: |
+          docker compose build frontend
+
+      - name: Run Frontend Lint & Vitest Unit Tests
+        run: |
+          docker compose run --rm --no-deps frontend sh -c "npm run lint && npm test"
+
+  # ===========================================================================
+  # 2. DOCKER COMPOSE STACK: Integration & End-to-End Tests
+  # ===========================================================================
+  integration-and-e2e:
+    name: Compose Stack (Integration & E2E Tests)
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Compose Services
+        run: |
+          docker compose build
+
+      - name: Start Compose Services (Database, Backend, Frontend)
+        run: |
+          docker compose up -d db backend frontend
+
+      - name: Wait for Stack Healthiness
+        run: |
+          echo "Waiting for backend health endpoint (http://localhost:8003/health)..."
+          timeout 90s bash -c 'until curl -fsS http://localhost:8003/health > /dev/null 2>&1; do sleep 2; done'
+          echo "Backend is healthy!"
+          curl -s http://localhost:8003/health
+
+      - name: Run PostgreSQL Integration Tests
+        run: |
+          docker compose run --rm backend pytest tests/integration -v
+
+      - name: Run Playwright End-to-End Tests
+        run: |
+          docker compose run --rm e2e
+
+      - name: Tear Down Compose Stack
+        if: always()
+        run: |
+          docker compose down -v
+
+  # ===========================================================================
+  # 3 & 4. DEPLOY TO RENDER (OIDC ROLE) & VALIDATE HEALTH
+  # ===========================================================================
+  deploy-render:
+    name: Deploy to Render & Validate Health
+    needs: [integration-and-e2e]
+    if: |
+      (github.ref == 'refs/heads/main' && github.event_name != 'pull_request') ||
+      (github.event_name == 'workflow_dispatch' && (inputs.deploy_to_render == true || inputs.deploy_to_render == 'true'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for GitHub OIDC role assumption
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 3a: Assume IAM Role using GitHub OIDC (Keyless Cloud Authentication)
+      - name: Authenticate via GitHub OIDC Role
+        id: oidc-auth
+        if: env.RENDER_OIDC_ROLE_ARN != '' || env.AWS_ROLE_TO_ASSUME != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.RENDER_OIDC_ROLE_ARN || secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+          role-session-name: GitHubActionsRenderDeploy-${{ github.run_id }}
+        env:
+          RENDER_OIDC_ROLE_ARN: ${{ secrets.RENDER_OIDC_ROLE_ARN }}
+          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
+      # Step 3b: Retrieve Render credentials from AWS Secrets Manager / SSM (if OIDC role was assumed)
+      - name: Retrieve Render Credentials via OIDC Session
+        if: env.RENDER_OIDC_ROLE_ARN != '' || env.AWS_ROLE_TO_ASSUME != ''
+        run: |
+          echo "Checking for Render credentials in AWS Secrets Manager..."
+          if aws secretsmanager describe-secret --secret-id personal-lifecycle/render >/dev/null 2>&1; then
+            SECRET_VAL=$(aws secretsmanager get-secret-value --secret-id personal-lifecycle/render --query SecretString --output text)
+            HOOK_URL=$(echo "$SECRET_VAL" | grep -o '"deploy_hook_url": *"[^"]*"' | cut -d'"' -f4 || true)
+            API_KEY=$(echo "$SECRET_VAL" | grep -o '"api_key": *"[^"]*"' | cut -d'"' -f4 || true)
+            SRV_ID=$(echo "$SECRET_VAL" | grep -o '"service_id": *"[^"]*"' | cut -d'"' -f4 || true)
+            if [ -n "$HOOK_URL" ]; then echo "RENDER_DEPLOY_HOOK_URL=$HOOK_URL" >> $GITHUB_ENV; fi
+            if [ -n "$API_KEY" ]; then echo "RENDER_API_KEY=$API_KEY" >> $GITHUB_ENV; fi
+            if [ -n "$SRV_ID" ]; then echo "RENDER_SERVICE_ID=$SRV_ID" >> $GITHUB_ENV; fi
+          elif aws ssm get-parameter --name "/personal-lifecycle/render/deploy_hook_url" >/dev/null 2>&1; then
+            HOOK_URL=$(aws ssm get-parameter --name "/personal-lifecycle/render/deploy_hook_url" --with-decryption --query Parameter.Value --output text)
+            echo "RENDER_DEPLOY_HOOK_URL=$HOOK_URL" >> $GITHUB_ENV
+          fi
+        env:
+          RENDER_OIDC_ROLE_ARN: ${{ secrets.RENDER_OIDC_ROLE_ARN }}
+          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
+      # Step 3c: Deploy to Render via Deploy Hook or Render REST API
+      - name: Trigger Render Deployment
+        id: deploy
+        env:
+          DEPLOY_HOOK: ${{ env.RENDER_DEPLOY_HOOK_URL || secrets.RENDER_DEPLOY_HOOK_URL }}
+          API_KEY: ${{ env.RENDER_API_KEY || secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ env.RENDER_SERVICE_ID || secrets.RENDER_SERVICE_ID }}
+        run: |
+          echo "================================================================"
+          echo "Triggering Render deployment..."
+          echo "================================================================"
+
+          if [ -n "$DEPLOY_HOOK" ]; then
+            echo "Triggering deployment via Render Deploy Hook..."
+            RESPONSE=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" -X POST "$DEPLOY_HOOK")
+            HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d':' -f2)
+            echo "Render Deploy Hook response code: $HTTP_CODE"
+            if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+              echo "Deployment triggered successfully via deploy hook!"
+            else
+              echo "Warning: Deploy hook returned non-2xx status code: $HTTP_CODE"
+            fi
+          elif [ -n "$API_KEY" ] && [ -n "$SERVICE_ID" ]; then
+            echo "Triggering deployment via Render REST API for service: $SERVICE_ID..."
+            RESPONSE=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" -X POST \
+              "https://api.render.com/v1/services/${SERVICE_ID}/deploys" \
+              -H "Authorization: Bearer ${API_KEY}" \
+              -H "Accept: application/json" \
+              -H "Content-Type: application/json" \
+              -d '{"clearCache": "do_not_clear"}')
+            HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d':' -f2)
+            echo "Render API response code: $HTTP_CODE"
+            if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+              echo "Deployment triggered successfully via Render API!"
+            else
+              echo "Warning: Render API returned non-2xx status code: $HTTP_CODE"
+            fi
+          else
+            echo "NOTE: Neither RENDER_DEPLOY_HOOK_URL nor RENDER_API_KEY/RENDER_SERVICE_ID configured."
+            echo "Proceeding to health endpoint validation stage."
+          fi
+
+      # Step 4: Validate that the deploy is successful by checking the health endpoint
+      - name: Validate Deployment Health Endpoint
+        env:
+          HEALTH_URL: ${{ inputs.render_health_url || secrets.RENDER_HEALTH_URL || 'https://personal-lifecycle-frontend.onrender.com/health' }}
+          MAX_ATTEMPTS: 30
+          POLL_INTERVAL: 10
+        run: |
+          echo "================================================================"
+          echo "Validating Render deployment health..."
+          echo "Target Health URL: $HEALTH_URL"
+          echo "Max Attempts: $MAX_ATTEMPTS (Checking every ${POLL_INTERVAL}s)"
+          echo "================================================================"
+
+          # Initial wait for Render container rollout initiation
+          sleep 15
+
+          HEALTH_SUCCESS=false
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            echo "Attempt $i/$MAX_ATTEMPTS: Polling $HEALTH_URL..."
+            RESPONSE=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" --connect-timeout 10 --max-time 15 "$HEALTH_URL" 2>&1 || true)
+            HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d':' -f2 || true)
+            PAYLOAD=$(echo "$RESPONSE" | grep -v "HTTP_STATUS:" || true)
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo ">>> Healthcheck returned HTTP 200 OK!"
+              echo "Response payload: $PAYLOAD"
+              if echo "$PAYLOAD" | grep -q '"status"[[:space:]]*:[[:space:]]*"healthy"'; then
+                echo ">>> Validated payload contains 'status: healthy'!"
+                HEALTH_SUCCESS=true
+                break
+              else
+                echo "HTTP 200 received; waiting for healthy status in payload..."
+              fi
+            else
+              echo "Received status: ${HTTP_CODE:-connection failure}. Retrying in ${POLL_INTERVAL}s..."
+            fi
+
+            sleep $POLL_INTERVAL
+          done
+
+          if [ "$HEALTH_SUCCESS" = "true" ]; then
+            echo "================================================================"
+            echo "SUCCESS: Render deployment is live and healthy!"
+            echo "================================================================"
+            exit 0
+          else
+            echo "================================================================"
+            echo "ERROR: Health check validation timed out after $MAX_ATTEMPTS attempts."
+            echo "Target URL: $HEALTH_URL"
+            echo "================================================================"
+            if [ "${{ secrets.STRICT_HEALTH_CHECK }}" = "false" ]; then
+              echo "STRICT_HEALTH_CHECK=false configured; continuing without failing build."
+              exit 0
+            fi
+            exit 1
+          fi

@@ -88,3 +88,6 @@ tf-plan-render:
 cf-validate:
 	docker run --rm -v $(CURDIR)/cloudformation:/cf $(AWS_CLI_IMAGE) cloudformation validate-template --template-body file:///cf/aws-ec2-compose.yaml
 
+ci-validate:
+	act -n -W .github/workflows/ci.yml
+

@@ -32,3 +32,8 @@ output "ssm_session_command" {
   description = "AWS CLI command to start an encrypted browser/terminal session via SSM"
   value       = "aws ssm start-session --target ${aws_instance.app.id} --region ${var.aws_region}"
 }
+
+output "github_oidc_role_arn" {
+  description = "ARN of the IAM role assumed by GitHub Actions via OIDC"
+  value       = var.enable_github_oidc ? aws_iam_role.github_actions_render_deployer[0].arn : null
+}

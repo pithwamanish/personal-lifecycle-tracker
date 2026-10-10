@@ -76,3 +76,15 @@ variable "postgres_password" {
   default     = ""
   sensitive   = true
 }
+
+variable "enable_github_oidc" {
+  description = "Whether to provision the GitHub Actions OIDC provider and IAM role for Render deployment"
+  type        = bool
+  default     = true
+}
+
+variable "github_repo" {
+  description = "GitHub repository identifier in org/repo format (e.g. pithwamanish/personal-lifecycle-tracker)"
+  type        = string
+  default     = "pithwamanish/personal-lifecycle-tracker"
+}

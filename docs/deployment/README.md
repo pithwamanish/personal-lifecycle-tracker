@@ -15,6 +15,7 @@ The application uses a 3-tier containerized architecture:
 |---|---|---|---|---|
 | **Render** | Render Blueprint (`render.yaml`) | Managed PostgreSQL + Docker Web Services (Backend + Caddy Frontend) | Free / Starter | [Render Deployment Guide](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/render.md) |
 | **Render** | Terraform (`terraform/render/`) | Declarative infrastructure management via Render Terraform Provider | Free / Starter | [Render Deployment Guide](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/render.md) |
+| **CI/CD** | GitHub Actions (`.github/workflows/ci.yml`) | Parallel Tests + Docker Compose E2E + GitHub OIDC Auth + Render Deploy + Health Validation | Free Tier Eligible | [CI/CD Pipeline Guide](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/ci-cd.md) |
 | **AWS** | Terraform (`terraform/aws/`) | EC2 (`t3.micro`/Free Tier) + Elastic IP + SSM Session Manager + Production Docker Compose | Free Tier Eligible (~$0/mo) | [AWS Terraform Guide](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/aws-terraform.md) |
 | **AWS** | CloudFormation (`cloudformation/`) | 1-Click CloudFormation Stack (VPC, Security Group, EC2, Elastic IP, SSM) | Free Tier Eligible (~$0/mo) | [AWS CloudFormation Guide](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/aws-cloudformation.md) |
 
@@ -71,6 +72,7 @@ make prod-down
 │       └── terraform.tfvars.example
 └── docs/deployment/
     ├── README.md                           # This overview index
+    ├── ci-cd.md                            # GitHub Actions CI/CD & Render OIDC deployment guide
     ├── render.md                           # Render Blueprint & Terraform guide
     ├── aws-terraform.md                    # AWS Terraform execution guide
     └── aws-cloudformation.md               # AWS CloudFormation execution guide

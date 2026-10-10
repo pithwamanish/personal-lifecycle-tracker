@@ -5,6 +5,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6.svg?logo=typescript)](https://www.typescriptlang.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16.0-4169E1.svg?logo=postgresql)](https://www.postgresql.org)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg?logo=docker)](https://www.docker.com)
+[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF.svg?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
 [![Terraform](https://img.shields.io/badge/Terraform-1.7+-7B42BC.svg?logo=terraform)](https://www.terraform.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -112,6 +113,20 @@ make tf-fmt
 ```
 
 For complete instructions, see the [Deployment Documentation Index](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/README.md).
+
+---
+
+## Continuous Integration & Deployment (CI/CD)
+
+The automated GitHub Actions workflow ([`.github/workflows/ci.yml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/.github/workflows/ci.yml)) provides test-gated delivery:
+
+1. **Parallel Unit Tests**: Backend (FastAPI Pytest) and Frontend (TypeScript lint + Vitest) run concurrently.
+2. **Docker Compose Integration & E2E**: Builds the full stack, starts PostgreSQL, backend, and frontend containers, runs 27 integration tests, and executes 17 Playwright E2E browser journeys.
+3. **Keyless Cloud Authentication (GitHub OIDC)**: Uses GitHub OIDC (`id-token: write`) to assume an AWS IAM role (`terraform/aws/oidc.tf`) and fetch deployment credentials securely from AWS Secrets Manager without long-lived static secrets.
+4. **Automated Render Deployment**: Triggers zero-downtime deployment via Render Deploy Hook or REST API.
+5. **Healthcheck Verification**: Resilient polling loop validates that `https://<frontend-subdomain>.onrender.com/health` returns HTTP 200 with `"status": "healthy"`.
+
+For configuration and secrets setup, see the [CI/CD Pipeline Guide](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/ci-cd.md).
 
 ---
 
