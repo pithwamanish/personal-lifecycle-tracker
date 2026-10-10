@@ -21,6 +21,9 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+    "integration: marks tests as integration tests executed against live container services",
+]
 
 [build-system]
 requires = ["hatchling"]
