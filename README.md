@@ -89,6 +89,34 @@ make prod-down
 
 ---
 
+## Observability Infrastructure (Decoupled LGTM + OTel Stack)
+
+Personal Lifecycle Tracker includes an independent, containerized observability project in `observability/` featuring **OpenTelemetry Collector**, **Prometheus**, **Loki**, **Tempo**, and **Grafana**:
+
+```bash
+# Start observability stack
+make obs-up
+
+# Check container status
+make obs-ps
+
+# View live telemetry logs
+make obs-logs
+
+# Stop observability stack
+make obs-down
+```
+
+- **Grafana Dashboard**: [http://localhost:3004](http://localhost:3004) (`admin` / `admin`)
+- **Prometheus UI**: [http://localhost:9091](http://localhost:9091)
+- **OTel Collector OTLP HTTP Endpoint**: `http://localhost:4328`
+- **Tempo Trace Ingestion**: `http://localhost:3201`
+- **Loki Log Ingestion**: `http://localhost:3101`
+
+For details on configuration and telemetry specifications, see [`observability/README.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/observability/README.md) and [`_docs/telemetry.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/_docs/telemetry.md).
+
+---
+
 ## Cloud Infrastructure & Environments (Dev & Production)
 
 We maintain two independent copies of our infrastructure:

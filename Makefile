@@ -1,4 +1,4 @@
-.PHONY: dev build test test-backend test-frontend test-integration test-e2e lint down clean logs ps ci-validate promote-validate
+.PHONY: dev build test test-backend test-frontend test-integration test-e2e lint down clean logs ps ci-validate promote-validate obs-up obs-down obs-ps obs-logs
 
 dev:
 	docker compose up --build
@@ -56,6 +56,19 @@ prod-ps:
 
 prod-logs:
 	docker compose -f docker-compose.prod.yml logs -f
+
+# Observability Stack (Decoupled Compose Project: OTel Collector, Prometheus, Loki, Tempo, Grafana)
+obs-up:
+	docker compose -f observability/docker-compose.yaml up -d
+
+obs-down:
+	docker compose -f observability/docker-compose.yaml down -v
+
+obs-ps:
+	docker compose -f observability/docker-compose.yaml ps
+
+obs-logs:
+	docker compose -f observability/docker-compose.yaml logs -f
 
 # Registry (ECR) Image Stages & Pattern Tagging (YYYYMMDD-HHMMSS-shortsha)
 IMAGE_TAG ?= $(shell date -u +'%Y%m%d-%H%M%S')-$(shell git rev-parse --short=7 HEAD 2>/dev/null || echo "latest")

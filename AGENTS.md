@@ -21,6 +21,13 @@ Welcome to the **Personal Lifecycle Tracker** repository. This project manages R
 | **Frontend (Dev)** | `3000` | `3003` (`${FRONTEND_PORT:-3003}`) | `http://localhost:3003/` |
 | **API Docs (Swagger)** | `8000` | `8003` | `http://localhost:8003/docs` |
 | **Production Stack (Caddy)** | `80` | `8088` (`${PROD_PORT:-8088}`) | `http://localhost:8088/health` |
+| **OTel Collector (gRPC)** | `4317` | `4327` (`${OTEL_GRPC_PORT:-4327}`) | Internal gRPC OTLP receiver |
+| **OTel Collector (HTTP)** | `4318` | `4328` (`${OTEL_HTTP_PORT:-4328}`) | `http://localhost:4328/v1/traces` |
+| **OTel Metrics (Prometheus)** | `8889` | `8899` (`${OTEL_METRICS_PORT:-8899}`) | `http://localhost:8899/metrics` |
+| **Prometheus Server** | `9090` | `9091` (`${PROMETHEUS_PORT:-9091}`) | `http://localhost:9091` |
+| **Loki Log Engine** | `3100` | `3101` (`${LOKI_PORT:-3101}`) | `http://localhost:3101/ready` |
+| **Tempo Trace Engine** | `3200` | `3201` (`${TEMPO_PORT:-3201}`) | `http://localhost:3201/ready` |
+| **Grafana UI & Dashboards** | `3000` | `3004` (`${GRAFANA_PORT:-3004}`) | `http://localhost:3004/api/health` |
 
 ---
 
@@ -108,6 +115,46 @@ docker compose -f docker-compose.prod.yml down -v
 
 ---
 
+### C. Observability Mode (Decoupled LGTM + OTel Stack)
+
+Start the independent observability stack (OpenTelemetry Collector, Prometheus, Loki, Tempo, Grafana):
+```bash
+# Using Makefile
+make obs-up
+
+# Or directly with Docker Compose
+docker compose -f observability/docker-compose.yaml up -d
+```
+
+Verify running status:
+```bash
+make obs-ps
+# or: docker compose -f observability/docker-compose.yaml ps
+```
+
+Access observability dashboards & engines:
+- **Grafana UI**: [http://localhost:3004](http://localhost:3004) (`admin` / `admin`)
+- **Prometheus UI**: [http://localhost:9091](http://localhost:9091)
+- **Tempo Status**: [http://localhost:3201/ready](http://localhost:3201/ready)
+- **Loki Status**: [http://localhost:3101/ready](http://localhost:3101/ready)
+- **OTel Collector OTLP HTTP Receiver**: [http://localhost:4328/v1/traces](http://localhost:4328/v1/traces)
+- **OTel Collector App Metrics Exporter**: [http://localhost:8899/metrics](http://localhost:8899/metrics)
+
+Stream observability logs:
+```bash
+make obs-logs
+# Or specific component:
+docker compose -f observability/docker-compose.yaml logs -f otel-collector
+```
+
+Tear down observability stack:
+```bash
+make obs-down
+# or: docker compose -f observability/docker-compose.yaml down -v
+```
+
+---
+
 ## 4. Testing & Quality Verification
 
 All verification commands execute in isolated container environments:
@@ -191,6 +238,17 @@ VITE_BACKEND_URL=http://backend:8000
 ├── render.yaml                # Render Blueprint declarative 1-click deployment
 ├── docker-compose.yaml        # Development multi-app composition
 ├── docker-compose.prod.yml    # Production multi-stage Caddy composition
+├── observability/             # Decoupled Observability Compose project
+│   ├── docker-compose.yaml    # OpenTelemetry Collector, Prometheus, Loki, Tempo, Grafana
+│   ├── otel-collector-config.yaml # OTLP pipelines to Tempo, Prometheus, and Loki
+│   ├── prometheus.yml         # Prometheus scrape configuration
+│   ├── loki-config.yaml       # Loki filesystem & TSDB storage configuration
+│   ├── tempo-config.yaml      # Tempo local trace storage configuration
+│   ├── .env.example           # Configurable port and container overrides
+│   ├── README.md              # Observability guide, architecture & verification
+│   └── grafana/
+│       ├── dashboards/        # Pre-provisioned Golden Signals overview dashboard
+│       └── provisioning/      # Automated datasources (Loki, Tempo, Prometheus) & dashboards
 ├── openapi.yaml               # Root API contract
 ├── contracts/
 │   └── openapi.yaml           # Frozen canonical contract
