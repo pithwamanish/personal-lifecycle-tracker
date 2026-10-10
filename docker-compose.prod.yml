@@ -31,7 +31,7 @@ services:
       CORS_ORIGINS: "http://localhost:8088"
       DATABASE_URL: "${DATABASE_URL:-postgresql://postgres:postgres@db:5432/lifecycle}"
       APP_ENV: "${APP_ENV:-production}"
-      APP_VERSION: "${APP_VERSION:-${BACKEND_IMAGE:-1.0.0}}"
+      APP_VERSION: "${APP_VERSION:-1.0.0}"
       OTEL_SERVICE_NAME: "api-backend"
       OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-http://personal-lifecycle-otel-collector:4318}"
       OTEL_RESOURCE_ATTRIBUTES: "service.name=api-backend,deployment.environment=${APP_ENV:-production},service.version=${APP_VERSION:-1.0.0}"
@@ -50,7 +50,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: ${FRONTEND_IMAGE:-personal-lifecycle-tracker-frontend:latest}
+    image: ${FRONTEND_IMAGE:-personal-lifecycle-tracker-frontend:prod}
     build:
       context: ./frontend
       dockerfile: Dockerfile

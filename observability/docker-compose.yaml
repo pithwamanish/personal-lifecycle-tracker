@@ -12,7 +12,10 @@ services:
       - "${OTEL_HTTP_PORT:-4328}:4318" # OTLP HTTP receiver
       - "${OTEL_METRICS_PORT:-8899}:8889" # Prometheus metrics exporter
     networks:
-      - observability-net
+      observability-net:
+        aliases:
+          - otel-collector
+          - personal-lifecycle-otel-collector
     depends_on:
       - tempo
       - loki

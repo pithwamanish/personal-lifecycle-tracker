@@ -22,3 +22,9 @@ scrape_configs:
     metrics_path: "/metrics"
     static_configs:
       - targets: ["personal-lifecycle-tracker-backend:8000"]
+        labels:
+          environment: "development"
+      - targets: ["personal-lifecycle-tracker-backend-prod:8000"]
+        labels:
+          environment: "production"
+

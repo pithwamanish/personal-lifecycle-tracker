@@ -55,6 +55,7 @@ services:
     restart: unless-stopped
 
   frontend:
+    image: personal-lifecycle-tracker-frontend:dev
     build:
       context: ./frontend
       dockerfile: Dockerfile
