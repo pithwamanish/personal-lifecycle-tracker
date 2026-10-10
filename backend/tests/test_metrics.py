@@ -113,3 +113,35 @@ def test_route_normalization_avoids_cardinality_explosion(client: TestClient, au
     # The route should be normalized to /api/v1/items/{id} rather than raw UUID
     assert 'http_route="/api/v1/items/{id}"' in text
     assert "8f51a704-5853-41bb-9466-9e1234567890" not in text
+
+
+def test_canvas_component_metrics(client: TestClient):
+    """Verify canvas component creation success and failure metric recording."""
+    # 1. Create a successful canvas component
+    res_success = client.post(
+        "/api/v1/canvas/components",
+        json={"name": "Lifecycle Card Component", "componentType": "card", "properties": {"width": 300}},
+    )
+    assert res_success.status_code == 201
+    comp_data = res_success.json()
+    assert comp_data["name"] == "Lifecycle Card Component"
+    assert comp_data["componentType"] == "card"
+
+    # 2. Trigger a component creation failure (empty name)
+    res_fail = client.post(
+        "/api/v1/canvas/components",
+        json={"name": "", "componentType": "card"},
+    )
+    assert res_fail.status_code == 400
+
+    # 3. Verify metrics endpoint output
+    metrics_res = client.get("/metrics")
+    assert metrics_res.status_code == 200
+    text = metrics_res.text
+
+    assert "app_canvas_components_created_total" in text
+    assert 'app_canvas_components_created_total{component_type="card",deployment_environment="development",service_name="api-backend",service_version="dev-latest",status="success"}' in text
+    assert 'app_canvas_components_created_total{component_type="card",deployment_environment="development",service_name="api-backend",service_version="dev-latest",status="failure"}' in text
+    assert "app_canvas_component_creation_failures_total" in text
+    assert 'app_canvas_component_creation_failures_total{component_type="card",deployment_environment="development",service_name="api-backend",service_version="dev-latest"}' in text
+

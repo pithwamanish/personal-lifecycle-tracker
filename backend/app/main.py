@@ -5,7 +5,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.routers import auth, dev, groups, health, items, reminders, users
+from app.routers import auth, canvas, dev, groups, health, items, reminders, users
 from app.telemetry import init_opentelemetry, setup_telemetry_middleware
 
 
@@ -59,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
     app.include_router(items.router, prefix="/api/v1/items", tags=["items"])
+    app.include_router(canvas.router, prefix="/api/v1/canvas", tags=["canvas"])
     app.include_router(groups.router, prefix="/api/v1/groups", tags=["groups"])
     app.include_router(reminders.router, prefix="/api/v1/reminders", tags=["reminders"])
     app.include_router(dev.router, prefix="/api/v1/dev", tags=["dev"])

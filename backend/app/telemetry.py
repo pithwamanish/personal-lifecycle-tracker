@@ -135,6 +135,21 @@ REMINDERS_SUMMARY_REQUESTS_TOTAL = Counter(
     registry=REGISTRY,
 )
 
+# 5. Product Metrics: Canvas Components (Creation and Failure Tracking)
+CANVAS_COMPONENTS_CREATED_TOTAL = Counter(
+    "app_canvas_components_created_total",
+    "Total count of canvas components created by status and type",
+    ["status", "component_type", "deployment_environment", "service_version", "service_name"],
+    registry=REGISTRY,
+)
+
+CANVAS_COMPONENT_CREATION_FAILURES_TOTAL = Counter(
+    "app_canvas_component_creation_failures_total",
+    "Total count of canvas component creation failures by type",
+    ["component_type", "deployment_environment", "service_version", "service_name"],
+    registry=REGISTRY,
+)
+
 
 def _init_default_series() -> None:
     """Pre-initialize key series so metric queries return series even before first traffic."""
@@ -153,6 +168,11 @@ def _init_default_series() -> None:
     REMINDERS_SUMMARY_REQUESTS_TOTAL.labels(deployment_environment=ENVIRONMENT, service_version=VERSION, service_name=SERVICE_NAME)
     GROUPS_CREATED_TOTAL.labels(deployment_environment=ENVIRONMENT, service_version=VERSION, service_name=SERVICE_NAME)
     GROUP_MEMBERS_INVITED_TOTAL.labels(deployment_environment=ENVIRONMENT, service_version=VERSION, service_name=SERVICE_NAME)
+
+    for c_type in ("card", "node", "panel", "generic"):
+        CANVAS_COMPONENTS_CREATED_TOTAL.labels(status="success", component_type=c_type, deployment_environment=ENVIRONMENT, service_version=VERSION, service_name=SERVICE_NAME)
+        CANVAS_COMPONENTS_CREATED_TOTAL.labels(status="failure", component_type=c_type, deployment_environment=ENVIRONMENT, service_version=VERSION, service_name=SERVICE_NAME)
+        CANVAS_COMPONENT_CREATION_FAILURES_TOTAL.labels(component_type=c_type, deployment_environment=ENVIRONMENT, service_version=VERSION, service_name=SERVICE_NAME)
 
 
 _init_default_series()
@@ -268,6 +288,25 @@ def update_lifecycle_items_gauge(lifecycle_type: str, status: str, count: int) -
         service_version=VERSION,
         service_name=SERVICE_NAME,
     ).set(count)
+
+
+def record_canvas_component_created(component_type: str = "card", success: bool = True) -> None:
+    """Record canvas component creation attempts and failures."""
+    status_str = "success" if success else "failure"
+    CANVAS_COMPONENTS_CREATED_TOTAL.labels(
+        status=status_str,
+        component_type=component_type,
+        deployment_environment=ENVIRONMENT,
+        service_version=VERSION,
+        service_name=SERVICE_NAME,
+    ).inc()
+    if not success:
+        CANVAS_COMPONENT_CREATION_FAILURES_TOTAL.labels(
+            component_type=component_type,
+            deployment_environment=ENVIRONMENT,
+            service_version=VERSION,
+            service_name=SERVICE_NAME,
+        ).inc()
 
 
 # -----------------------------------------------------------------------------

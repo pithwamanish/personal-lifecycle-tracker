@@ -94,6 +94,8 @@ All application metrics emitted by `api-backend` attach the mandatory Golden Tri
 | `app_group_members_invited_total` | Counter | `deployment_environment`, `service_version`, `service_name` | Group membership invitations |
 | `app_digests_generated_total` | Counter | `status` (`success`, `failure`), `deployment_environment`, `service_version`, `service_name` | Scheduled morning email digest runs |
 | `app_reminders_summary_requests_total` | Counter | `deployment_environment`, `service_version`, `service_name` | In-app reminders drawer views |
+| `app_canvas_components_created_total` | Counter | `status` (`success`, `failure`), `component_type`, `deployment_environment`, `service_version`, `service_name` | Canvas component creation attempts and outcomes |
+| `app_canvas_component_creation_failures_total` | Counter | `component_type`, `deployment_environment`, `service_version`, `service_name` | Canvas component creation failure counts |
 
 ---
 
@@ -110,11 +112,27 @@ Health checks and internal scraping endpoints are excluded from HTTP duration an
 
 ## 6. Actionable Prometheus Alerting Rules (`observability/alert_rules.yml`)
 
-Prometheus evaluates alerting rules every 5s with mandatory `service`, `environment`, `version`, `owner`, and `severity` labels:
+Prometheus evaluates alerting rules every 5s with mandatory `service`, `environment`, `version` / `deployed_version`, `owner`, and `severity` labels:
 
 1. **`HighHttpErrorRate`**: Triggers when 5xx errors exceed 5% of all requests over 1 minute.
 2. **`HighHttpLatencyP99`**: Triggers when p99 request latency exceeds 1000ms over 2 minutes.
 3. **`DailyDigestFailures`**: Triggers when daily digest email generation fails.
+4. **`RepeatedCanvasComponentCreationFailures`**: Triggers when canvas component-creation error rate exceeds 5% over 5 minutes sustained for 2 minutes (`for: 2m`). Represents direct real user impact on canvas authoring. Includes `service`, `environment`, `deployed_version`, `owner` (`backend-team`), and Grafana `dashboard_url`.
+5. **`CanvasComponentCreationFailures`**: Triggers when component-creation failure rate exceeds 0.05 failures/second over 5 minutes sustained for 2 minutes (`for: 2m`).
+
+---
+
+## 7. Runbooks for Actionable Alerts
+
+### `docs/telemetry.md#canvas-component-creation-failures`
+- **Severity**: Critical
+- **User Impact**: Users are unable to instantiate canvas components (cards, nodes, panels, widgets). Failure rate exceeds 5% sustained over 2 minutes.
+- **Triage Steps**:
+  1. Open the alert's `dashboard_url` to inspect current failure rates and identify the affected service version and environment.
+  2. Inspect backend logs: `docker compose logs --tail=100 -f backend` or via Loki in Grafana (`{service_name="api-backend"} |= "canvas"`).
+  3. Verify recent deployments or code modifications in `backend/app/routers/canvas.py` or component creation handlers.
+  4. If a regression was introduced in the deployed version, rollback to the previous stable release or apply a hotfix.
+
 
 ---
 

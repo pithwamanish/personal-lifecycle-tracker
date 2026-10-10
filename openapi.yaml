@@ -704,6 +704,95 @@ paths:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
 
+  /api/v1/canvas/components:
+    get:
+      summary: List canvas components
+      description: Retrieve canvas components with optional componentType filtering.
+      parameters:
+        - name: componentType
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter components by type
+      responses:
+        '200':
+          description: List of canvas components
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CanvasComponent'
+    post:
+      summary: Create canvas component
+      description: Create a new canvas component and emit component creation telemetry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CanvasComponentCreateRequest'
+      responses:
+        '201':
+          description: Component created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanvasComponent'
+        '400':
+          description: Invalid component data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Canvas component creation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/canvas/components/{id}:
+    get:
+      summary: Get canvas component by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Canvas component details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanvasComponent'
+        '404':
+          description: Component not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Delete canvas component
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Component deleted
+        '404':
+          description: Component not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     BearerAuth:
@@ -1109,3 +1198,45 @@ components:
         message:
           type: string
           example: Operation completed successfully
+
+    CanvasComponentCreateRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: Lifecycle Card Component
+        componentType:
+          type: string
+          default: card
+          example: card
+        properties:
+          type: object
+          additionalProperties: true
+
+    CanvasComponent:
+      type: object
+      required:
+        - id
+        - name
+        - componentType
+        - createdAt
+      properties:
+        id:
+          type: string
+          example: 8f51a704-5853-41bb-9466-9e1234567890
+        name:
+          type: string
+          example: Lifecycle Card Component
+        componentType:
+          type: string
+          example: card
+        properties:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-10-10T12:00:00Z'
+
