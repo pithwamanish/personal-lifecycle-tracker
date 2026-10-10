@@ -42,8 +42,8 @@ if [ "${DRY_RUN:-false}" = "true" ] || [ "${EXECUTE_AGENT:-true}" = "false" ] ||
   exit 0
 fi
 
-# 1. Check for Antigravity Headless CLI (agy)
-if command -v agy >/dev/null 2>&1; then
+# 1. Check for Antigravity Headless CLI (agy) if in interactive TTY and not overridden
+if [ -t 0 ] && [ "${HEADLESS_MODE:-}" != "autonomous" ] && command -v agy >/dev/null 2>&1; then
   echo "==> Invoking Headless Coding Agent via Antigravity CLI (agy)..."
   AGY_FLAGS=()
   if [ "${HEADLESS_SKIP_PERMISSIONS:-true}" = "true" ]; then
@@ -54,8 +54,8 @@ if command -v agy >/dev/null 2>&1; then
   exit 0
 fi
 
-# 2. Check for Claude Code Headless CLI (claude)
-if command -v claude >/dev/null 2>&1; then
+# 2. Check for Claude Code Headless CLI (claude) if in interactive TTY and not overridden
+if [ -t 0 ] && [ "${HEADLESS_MODE:-}" != "autonomous" ] && command -v claude >/dev/null 2>&1; then
   echo "==> Invoking Headless Coding Agent via Claude Code CLI (claude -p)..."
   claude -p "$(cat "${PROMPT_FILE}")" || true
   echo "[${TIMESTAMP}] AGENT_EXECUTION_COMPLETED: runner='claude', alert='${ALERT_NAME}'" >> "${AUDIT_LOG}"
