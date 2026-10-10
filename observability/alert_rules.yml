@@ -52,3 +52,54 @@ groups:
           description: "Daily morning digest email generation experienced failures in {{ $labels.deployment_environment }}."
           dashboard_url: "http://localhost:3004/d/lifecycle-tracker-overview?var-environment={{ $labels.deployment_environment }}&var-version={{ $labels.service_version }}"
           runbook_url: "docs/telemetry.md#digest-failures"
+
+      - alert: RepeatedItemCreationFailures
+        expr: |
+          (
+            sum(rate(app_item_creation_failures_total[5m])) by (service_name, deployment_environment, service_version)
+            /
+            (
+              sum(rate(app_items_created_total[5m])) by (service_name, deployment_environment, service_version)
+              +
+              sum(rate(app_item_creation_failures_total[5m])) by (service_name, deployment_environment, service_version)
+            )
+          ) * 100 > 5
+        for: 2m
+        labels:
+          severity: critical
+          service: "{{ $labels.service_name }}"
+          environment: "{{ $labels.deployment_environment }}"
+          version: "{{ $labels.service_version }}"
+          deployed_version: "{{ $labels.service_version }}"
+          owner: backend-team
+        annotations:
+          summary: "Repeated lifecycle item-creation failures on {{ $labels.service_name }}"
+          description: "Service {{ $labels.service_name }} in {{ $labels.deployment_environment }} (deployed version: {{ $labels.service_version }}) is experiencing repeated lifecycle item-creation failures with an error rate of {{ $value | printf \"%.2f\" }}% over the last 5 minutes (threshold: > 5%)."
+          service: "{{ $labels.service_name }}"
+          environment: "{{ $labels.deployment_environment }}"
+          deployed_version: "{{ $labels.service_version }}"
+          owner: backend-team
+          dashboard_url: "http://localhost:3004/d/lifecycle-tracker-overview?var-environment={{ $labels.deployment_environment }}&var-version={{ $labels.service_version }}"
+          runbook_url: "docs/telemetry.md#item-creation-failures"
+
+      - alert: LifecycleItemCreationFailures
+        expr: |
+          sum(rate(app_item_creation_failures_total[5m])) by (service_name, deployment_environment, service_version) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          service: "{{ $labels.service_name }}"
+          environment: "{{ $labels.deployment_environment }}"
+          version: "{{ $labels.service_version }}"
+          deployed_version: "{{ $labels.service_version }}"
+          owner: backend-team
+        annotations:
+          summary: "Elevated lifecycle item-creation failure rate on {{ $labels.service_name }}"
+          description: "Service {{ $labels.service_name }} in {{ $labels.deployment_environment }} (deployed version: {{ $labels.service_version }}) is experiencing repeated lifecycle item-creation failures at {{ $value | printf \"%.2f\" }} failures/s (threshold: > 0.05/s)."
+          service: "{{ $labels.service_name }}"
+          environment: "{{ $labels.deployment_environment }}"
+          deployed_version: "{{ $labels.service_version }}"
+          owner: backend-team
+          dashboard_url: "http://localhost:3004/d/lifecycle-tracker-overview?var-environment={{ $labels.deployment_environment }}&var-version={{ $labels.service_version }}"
+          runbook_url: "docs/telemetry.md#item-creation-failures"
+

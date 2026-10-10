@@ -70,6 +70,13 @@ ITEMS_CREATED_TOTAL = Counter(
     registry=REGISTRY,
 )
 
+ITEM_CREATION_FAILURES_TOTAL = Counter(
+    "app_item_creation_failures_total",
+    "Total count of lifecycle item creation failures by lifecycle type",
+    ["lifecycle_type", "deployment_environment", "service_version", "service_name"],
+    registry=REGISTRY,
+)
+
 ITEMS_COMPLETED_TOTAL = Counter(
     "app_items_completed_total",
     "Total count of lifecycle items marked as complete",
@@ -142,9 +149,11 @@ def _init_default_series() -> None:
         ITEMS_CREATED_TOTAL.labels(lifecycle_type=l_type, deployment_environment=ENVIRONMENT, service_version=VERSION, service_name=SERVICE_NAME)
         ITEMS_COMPLETED_TOTAL.labels(lifecycle_type=l_type, deployment_environment=ENVIRONMENT, service_version=VERSION, service_name=SERVICE_NAME)
         ITEMS_DELETED_TOTAL.labels(lifecycle_type=l_type, deployment_environment=ENVIRONMENT, service_version=VERSION, service_name=SERVICE_NAME)
+        ITEM_CREATION_FAILURES_TOTAL.labels(lifecycle_type=l_type, deployment_environment=ENVIRONMENT, service_version=VERSION, service_name=SERVICE_NAME)
         for st in ("active", "completed", "overdue"):
             LIFECYCLE_ITEMS_CURRENT.labels(lifecycle_type=l_type, status=st, deployment_environment=ENVIRONMENT, service_version=VERSION, service_name=SERVICE_NAME).set(0)
 
+    ITEM_CREATION_FAILURES_TOTAL.labels(lifecycle_type="unknown", deployment_environment=ENVIRONMENT, service_version=VERSION, service_name=SERVICE_NAME)
     USER_SIGNUPS_TOTAL.labels(deployment_environment=ENVIRONMENT, service_version=VERSION, service_name=SERVICE_NAME)
     USER_LOGINS_TOTAL.labels(status="success", deployment_environment=ENVIRONMENT, service_version=VERSION, service_name=SERVICE_NAME)
     USER_LOGINS_TOTAL.labels(status="failure", deployment_environment=ENVIRONMENT, service_version=VERSION, service_name=SERVICE_NAME)
@@ -185,6 +194,16 @@ def record_http_request(method: str, route: str, status_code: int | str, duratio
 
 def record_item_created(lifecycle_type: str) -> None:
     ITEMS_CREATED_TOTAL.labels(
+        lifecycle_type=lifecycle_type,
+        deployment_environment=ENVIRONMENT,
+        service_version=VERSION,
+        service_name=SERVICE_NAME,
+    ).inc()
+
+
+def record_item_creation_failure(lifecycle_type: str = "unknown") -> None:
+    """Record a failed lifecycle item creation attempt."""
+    ITEM_CREATION_FAILURES_TOTAL.labels(
         lifecycle_type=lifecycle_type,
         deployment_environment=ENVIRONMENT,
         service_version=VERSION,

@@ -1094,9 +1094,20 @@
           "legendFormat": "Deleted: {{lifecycle_type}}",
           "range": true,
           "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(app_item_creation_failures_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[5m])) by (lifecycle_type)",
+          "legendFormat": "Failures: {{lifecycle_type}}",
+          "range": true,
+          "refId": "D"
         }
       ],
-      "title": "Lifecycle Operations Rate (Created vs Completed vs Deleted)",
+      "title": "Lifecycle Operations Rate (Created vs Completed vs Deleted vs Failures)",
       "type": "timeseries"
     }
   ],

@@ -12,7 +12,12 @@ from app.models import (
     User,
 )
 from app.store import DatabaseStore, get_store
-from app.telemetry import record_item_completed, record_item_created, record_item_deleted
+from app.telemetry import (
+    record_item_completed,
+    record_item_created,
+    record_item_creation_failure,
+    record_item_deleted,
+)
 
 router = APIRouter()
 
@@ -41,15 +46,29 @@ async def create_item(
     current_user: User = Depends(get_current_user_optional),
     store: DatabaseStore = Depends(get_store),
 ) -> LifecycleItem:
+    l_type = payload.lifecycleType.value if hasattr(payload.lifecycleType, "value") else str(payload.lifecycleType)
+    if not payload.name or not payload.name.strip():
+        record_item_creation_failure(l_type)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Item name cannot be empty",
+        )
     try:
         item = store.create_item(user=current_user, data=payload)
         record_item_created(item.lifecycleType.value)
         store.sync_metrics()
         return item
     except (ValueError, PermissionError) as exc:
+        record_item_creation_failure(l_type)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
+        )
+    except Exception as exc:
+        record_item_creation_failure(l_type)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Item creation failed: {exc}",
         )
 
 

@@ -113,3 +113,23 @@ def test_route_normalization_avoids_cardinality_explosion(client: TestClient, au
     # The route should be normalized to /api/v1/items/{id} rather than raw UUID
     assert 'http_route="/api/v1/items/{id}"' in text
     assert "8f51a704-5853-41bb-9466-9e1234567890" not in text
+
+
+def test_item_creation_failure_metrics(client: TestClient, auth_headers: dict):
+    """Verify that failed item creation attempts increment app_item_creation_failures_total."""
+    # Trigger an item creation failure (invalid lifecycle type or empty name)
+    fail_res = client.post(
+        "/api/v1/items",
+        json={"name": "   ", "lifecycleType": "renewal"},
+        headers=auth_headers,
+    )
+    # The store/endpoint rejects empty names with 400
+    assert fail_res.status_code == 400
+
+    metrics_res = client.get("/metrics")
+    assert metrics_res.status_code == 200
+    text = metrics_res.text
+
+    assert "app_item_creation_failures_total" in text
+    assert 'app_item_creation_failures_total{deployment_environment="development",lifecycle_type="renewal",service_name="api-backend",service_version="dev-latest"}' in text
+
