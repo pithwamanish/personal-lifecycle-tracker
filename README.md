@@ -5,15 +5,39 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6.svg?logo=typescript)](https://www.typescriptlang.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16.0-4169E1.svg?logo=postgresql)](https://www.postgresql.org)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg?logo=docker)](https://www.docker.com)
+[![Kubernetes Kind](https://img.shields.io/badge/Kubernetes-Kind-326CE5.svg?logo=kubernetes&logoColor=white)](https://kind.sigs.k8s.io/)
+[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-1.24-F54A00.svg?logo=opentelemetry)](https://opentelemetry.io)
 [![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF.svg?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
 [![Terraform](https://img.shields.io/badge/Terraform-1.7+-7B42BC.svg?logo=terraform)](https://www.terraform.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> Manage Renewals, Maintenance, and Warranties for independent users and shared groups, with action summaries, in-app reminders, and daily morning email digests.
+> Personal Lifecycle Tracker manages **Renewals**, **Maintenance**, and **Warranties** for independent users and shared collaborative groups, providing instant action summaries, in-app notifications, and scheduled daily morning email digests.
 
 ---
 
-## Architecture Overview
+## 1. Problem Description & System Functionality
+
+Modern households, individuals, and small teams struggle to track scattered recurring commitments:
+- **Expired Renewals**: Auto-renewing insurance policies, passports, vehicle registrations, and software licenses that expire without advance warning.
+- **Neglected Maintenance**: Routine servicing for vehicles (oil changes, tire rotations), HVAC filter replacements, and home appliances that cause costly damages when overlooked.
+- **Lost Warranties**: Expiring electronics and appliance warranties where proof-of-coverage and expiration dates are lost across scattered receipts.
+- **Lack of Shared Responsibility**: Roommates, couples, and family members duplicate purchases or miss shared deadlines because tracking lives in fragmented personal notes.
+
+### Expected Behavior & Core Capabilities
+1. **Multi-User Authentication**: Secure user registration, password hashing (`bcrypt`), and stateless JWT token authorization.
+2. **Three Core Lifecycle Types**:
+   - **Renewals**: Contract end-dates, policy renewals, membership expirations.
+   - **Maintenance**: Recurring check-ups, vehicle inspections, home upkeep.
+   - **Warranties**: Hardware purchase dates, coverage limits, warranty expirations.
+3. **Shared Collaborative Groups**: Users can create groups (e.g., "Family Home", "Apartment 4B"), invite members by email, and collaborate on shared lifecycle items. Items remain with the group when members leave.
+4. **Action Summaries & Reminders Engine**: Automatically detects items due within 30 days and overdue items, rendering an instant action dashboard with urgent priority sorting.
+5. **Scheduled Morning Digest Simulator**: Simulates daily 8:00 AM notification digests delivering upcoming deadlines to users and group members.
+
+Full specification is frozen in [`product-spec.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/product-spec.md) and task breakdown in [`backlog.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/backlog.md).
+
+---
+
+## 2. Architecture & System Topology
 
 ```
                                       ┌────────────────────────────────────────────────────────┐
@@ -40,39 +64,92 @@
                                       └────────────────────────────────────────────────────────┘
 ```
 
-- **Backend**: FastAPI (Python 3.11), SQLAlchemy, Pydantic v2, PyJWT, psycopg2.
+- **Backend**: FastAPI (Python 3.11), SQLAlchemy, Pydantic v2, PyJWT, psycopg2, Uvicorn.
 - **Frontend**: React 19, TypeScript, Vite 8, Tailwind CSS v4, Lucide icons.
 - **Reverse Proxy & Web Server**: Caddy 2 with automated gzip/zstd, security headers, and single-port reverse proxying.
-- **Database**: PostgreSQL 16 (or local SQLite fallback).
-- **API Contract**: Frozen OpenAPI 3.0.3 specification in [`contracts/openapi.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/contracts/openapi.yaml).
+- **Database**: PostgreSQL 16 (production and Docker Compose) with local SQLite fallback.
+- **API Contract**: Frozen OpenAPI 3.0.3 specification in [`contracts/openapi.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/contracts/openapi.yaml) and [`openapi.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/openapi.yaml).
+- **Containerization**: Multi-service Docker Compose (`docker-compose.yaml` and alias `docker-compose.yml`).
+- **Kubernetes**: Local declarative Kubernetes manifests in `k8s/` for [Kind](https://kind.sigs.k8s.io/).
+- **Observability**: OpenTelemetry distributed tracing, Prometheus metrics, Loki logs, Tempo traces, Grafana dashboards (`observability/`).
 
 ---
 
-## Quick Start (Development)
+## 3. AI-Assisted Development Workflow
 
-Run the full stack with hot reloading (zero local toolchain required, powered entirely by Docker):
+The project followed a disciplined AI-native lifecycle using interactive agents (Antigravity, Claude Code, Cursor) and headless operational loops:
+
+1. **Ideation to Specification (Homework 1 & 2)**:
+   - Socratic brainstorming produced [`product-spec.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/product-spec.md) and [`_docs/plan.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/_docs/plan.md).
+   - Decomposed into atomic tasks in [`backlog.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/backlog.md) and [`_docs/tasks.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/_docs/tasks.md).
+2. **Frontend Prototype with Mock Client (Homework 2)**:
+   - Scaffolded interactive React 19 UI in `frontend/` with centralized mock services layer (`src/services/api.ts`).
+3. **API Contract Freeze & Backend Implementation**:
+   - Reverse-engineered and frozen into [`contracts/openapi.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/contracts/openapi.yaml).
+   - Implemented FastAPI backend in `backend/` with in-memory fallback, then migrated to PostgreSQL.
+4. **Containerization & Local Kubernetes (Homework 3)**:
+   - Dockerized multi-app architecture (`docker-compose.yaml`).
+   - Packaged declarative Kind Kubernetes manifests with PersistentVolumeClaims in `k8s/`.
+5. **Observability & Autonomous Incident Response (Homework 4)**:
+   - OpenTelemetry Collector, Prometheus, Loki, Tempo, Grafana in `observability/`.
+   - Autonomous on-call responder in `on-call-engineer/` with code-enforced autonomy policy (`autonomy-policy.json`).
+
+Complete prompt transcripts, context injection strategies, and human verification gates are documented in [`docs/ai-tools-usage-and-review.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/ai-tools-usage-and-review.md).
+
+---
+
+## 4. Quick Start (Development Mode)
+
+Run the full stack with hot reloading (zero host runtime dependencies required, powered entirely by Docker):
 
 ```bash
-# Start all services (Database, Backend on :8003, Frontend on :3003)
+# Start full development cluster (PostgreSQL on :5434, Backend on :8003, Frontend on :3003)
 make up
 
-# Check status of running containers
+# Verify container status
 make ps
 
 # Stream logs
 make logs
 
-# Stop containers
+# Tear down containers
 make down
 ```
 
-- **Web Application**: [http://localhost:3003](http://localhost:3003)
+Access endpoints:
+- **Web Application UI**: [http://localhost:3003](http://localhost:3003)
 - **API Health Check**: [http://localhost:8003/health](http://localhost:8003/health)
-- **Swagger UI**: [http://localhost:8003/docs](http://localhost:8003/docs)
+- **Interactive OpenAPI / Swagger UI**: [http://localhost:8003/docs](http://localhost:8003/docs)
+- **Interactive ReDoc Documentation**: [http://localhost:8003/redoc](http://localhost:8003/redoc)
 
 ---
 
-## Production Mode (Caddy Reverse Proxy)
+## 5. Local Kubernetes Deployment with Kind (Homework 3)
+
+Deploy the entire stack to a local Kubernetes cluster using [Kind](https://kind.sigs.k8s.io/) (Kubernetes in Docker):
+
+```bash
+# 1. Create a local Kind cluster
+make kind-up
+
+# 2. Build local images and load them into the Kind cluster
+make kind-load
+
+# 3. Apply declarative manifests (PostgreSQL PVC + Backend + Caddy Gateway)
+make kind-deploy
+
+# 4. Wait for pod readiness and verify rollout status
+make kind-verify
+
+# 5. Tear down Kind cluster when finished
+make kind-down
+```
+
+For manifest specifications and port forwarding instructions, see [`k8s/README.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/k8s/README.md).
+
+---
+
+## 6. Production Mode (Caddy Reverse Proxy)
 
 Test the unified production build locally on port 8088 (single port, Caddy reverse-proxying API & static SPA):
 
@@ -80,7 +157,7 @@ Test the unified production build locally on port 8088 (single port, Caddy rever
 # Build and start production stack
 make prod-up
 
-# Verify health
+# Verify health via reverse proxy
 curl -f http://localhost:8088/health
 
 # Stop production stack
@@ -89,9 +166,35 @@ make prod-down
 
 ---
 
-## Observability Infrastructure (Decoupled LGTM + OTel Stack)
+## 7. Testing & Quality Verification
 
-Personal Lifecycle Tracker includes an independent, containerized observability project in `observability/` featuring **OpenTelemetry Collector**, **Prometheus**, **Loki**, **Tempo**, and **Grafana**:
+All verification commands execute in isolated container environments:
+
+```bash
+# Run full test suite (Backend unit + integration, Frontend Vitest, E2E Playwright)
+make test
+
+# Run backend tests only (FastAPI unit tests)
+make test-backend
+
+# Run PostgreSQL integration tests (multi-user collaboration, DB transactions)
+make test-integration
+
+# Run frontend unit tests (Vitest)
+make test-frontend
+
+# Run frontend static typecheck & lint
+make lint
+
+# Run Playwright E2E browser tests (17 multi-user journeys)
+make test-e2e
+```
+
+---
+
+## 8. Observability Infrastructure (Homework 4)
+
+Personal Lifecycle Tracker includes a decoupled, containerized observability stack in `observability/` featuring **OpenTelemetry Collector**, **Prometheus**, **Loki**, **Tempo**, and **Grafana**:
 
 ```bash
 # Start observability stack
@@ -107,21 +210,39 @@ make obs-logs
 make obs-down
 ```
 
-- **Grafana Dashboard**: [http://localhost:3004](http://localhost:3004) (`admin` / `admin`)
+- **Grafana Dashboards**: [http://localhost:3004](http://localhost:3004) (`admin` / `admin`)
 - **Prometheus UI**: [http://localhost:9091](http://localhost:9091)
 - **OTel Collector OTLP HTTP Endpoint**: `http://localhost:4328`
 - **Tempo Trace Ingestion**: `http://localhost:3201`
 - **Loki Log Ingestion**: `http://localhost:3101`
 
-For details on configuration and telemetry specifications, see [`observability/README.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/observability/README.md) and [`_docs/telemetry.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/_docs/telemetry.md).
+Detailed metrics, logs, and trace pipelines are documented in [`observability/README.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/observability/README.md) and [`_docs/telemetry.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/_docs/telemetry.md).
 
 ---
 
-## Cloud Infrastructure & Environments (Dev & Production)
+## 9. On-Call Engineer & Autonomous Incident Response (Homework 4)
 
-We maintain two independent copies of our infrastructure:
-- **Development (`dev`)**: Uses the baseline infrastructure configured for development workloads, isolated non-overlapping VPC networks (`10.1.0.0/16`), and free tier plans.
-- **Production (`production`)**: A second, independent copy of the infrastructure provisioned for high availability and production workloads (`10.0.0.0/16` VPC).
+An autonomous monitoring and incident remediation pipeline under [`on-call-engineer/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/on-call-engineer/README.md):
+- **Alert Poller** ([`on-call-engineer/poll-alerts.py`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/on-call-engineer/poll-alerts.py)): Continuously polls Prometheus alert rules every minute.
+- **Headless Agent Dispatch**: Normalizes alerts into [`payload-schema.json`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/on-call-engineer/payload-schema.json) and wakes up a headless coding agent.
+- **Code-Enforced Autonomy**: Permissions are enforced via [`autonomy-policy.json`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/on-call-engineer/autonomy-policy.json) and [`authorize-action`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/on-call-engineer/scripts/authorize-action).
+- **Incident Diagnosis & Runbooks**: See [`ops/diagnosis.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/ops/diagnosis.md) and [`ops/runbook.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/ops/runbook.md).
+
+```bash
+# Run continuous alert poller
+make on-call-poll
+
+# Run verification suite proving alert detection, prompt rendering, and agent dispatch
+make on-call-verify
+```
+
+---
+
+## 10. Cloud Infrastructure & Environments (Dev & Production)
+
+We maintain two independent copies of our infrastructure across **Render** and **AWS**:
+- **Development (`dev`)**: Isolated non-overlapping VPC networks (`10.1.0.0/16`) and free-tier plans.
+- **Production (`production`)**: A second, independent copy of the infrastructure provisioned for high availability (`10.0.0.0/16` VPC).
 
 | Cloud Platform | Dev Environment | Production Copy | Architecture |
 |---|---|---|---|
@@ -130,88 +251,76 @@ We maintain two independent copies of our infrastructure:
 | **AWS (Terraform)** | [`terraform/aws/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/aws/) (`10.1.0.0/16`) | [`terraform/aws-prod/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/aws-prod/) (`10.0.0.0/16`) | EC2 (`t3.micro`/Free Tier) + Elastic IP + SSM |
 | **AWS (CloudFormation)**| [`cloudformation/aws-ec2-compose.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose.yaml) | [`cloudformation/aws-ec2-compose-prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose-prod.yaml) | 1-Click AWS Stack (VPC, Subnet, SG, EC2, EIP, SSM) |
 
-### Zero-Host-Runtime IaC Commands (Dockerized)
 ```bash
-# Validate ALL Terraform environments simultaneously (AWS Dev, AWS Prod, Render Dev, Render Prod)
+# Validate ALL Terraform environments simultaneously (Dockerized)
 make tf-validate
 
-# Validate individual environments
-make tf-validate-aws        # AWS Dev
-make tf-validate-aws-prod   # AWS Production copy
-make tf-validate-render     # Render Dev
-make tf-validate-render-prod# Render Production copy
-
-# Format all Terraform files
-make tf-fmt
+# Validate CloudFormation templates
+make cf-validate
 ```
-
-For complete instructions, see the [Deployment Documentation Index](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/README.md).
 
 ---
 
-## Continuous Integration & Deployment (CI/CD)
+## 11. CI/CD Pipeline & Promotion Workflow
 
 The automated GitHub Actions workflow ([`.github/workflows/ci.yml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/.github/workflows/ci.yml)) provides test-gated delivery structured into two distinct stages:
-
 1. **Parallel Unit Tests**: Backend (FastAPI Pytest) and Frontend (TypeScript lint + Vitest) run concurrently.
 2. **Docker Compose Integration & E2E**: Builds the full stack, starts PostgreSQL, backend, and frontend containers, runs 27 integration tests, and executes 17 Playwright E2E browser journeys.
 3. **Stage 1 (Build)**: Compiles backend and frontend container images, tags each image using the `YYYYMMDD-HHMMSS-shortsha` pattern (e.g. `20260818-163457-83242da`), and pushes them to Amazon ECR.
 4. **Stage 2 (Deploy)**: Pulls the pre-built image artifacts from Amazon ECR and serves them via Docker Compose (`docker compose -f docker-compose.prod.yml up -d --no-build`), completely eliminating image building during deployment.
 5. **Keyless Cloud Authentication (GitHub OIDC)**: Uses GitHub OIDC (`id-token: write`) to assume an AWS IAM role (`terraform/aws/oidc.tf`) to authenticate with ECR and AWS SSM.
-6. **Healthcheck Verification**: Resilient polling loop validates that the deployed health endpoint returns HTTP 200 with `"status": "healthy"`.
 
-For configuration and secrets setup, see the [CI/CD Pipeline Guide](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/ci-cd.md).
-
-### Dev to Production Promotion Workflow
-
-A manual GitHub Actions workflow ([`.github/workflows/promote-dev-to-prod.yml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/.github/workflows/promote-dev-to-prod.yml)) promotes verified versions from `dev` to the production branch (`main`):
-- **Pre-Flight Conflict & Test Gates**: Verifies zero merge conflicts, then executes backend tests, frontend lint & Vitest, and PostgreSQL integration tests in Docker.
-- **Automated SemVer Tagging & Release**: Merges `dev` into `main`, auto-increments semantic version tags (e.g., `v1.0.0` → `v1.0.1` or accepts custom tag), compiles release notes, tags the commit, and cuts a GitHub Release.
-- **Dev Image Pull & Promotion to Prod**: Pulls the currently deployed dev image directly from Amazon ECR (discovered via SSM parameter `/personal-lifecycle/dev/image_tag`), re-tags the exact verified artifact using the `YYYYMMDD-HHMMSS-shortsha` pattern and release version tag, pushes to ECR, and serves it on production without rebuilding from source.
-- **Live Production Health Verification**: Polls the live health endpoint until HTTP 200 `"status": "healthy"` is confirmed.
-- **Dry-Run Capability**: Operators can simulate promotion, tests, and changelog generation safely without pushing commits or deploying.
-
+### Dev-to-Production Promotion Workflow
+The manual workflow ([`.github/workflows/promote-dev-to-prod.yml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/.github/workflows/promote-dev-to-prod.yml)) promotes verified dev versions to `main`:
+- Runs conflict and regression test gates.
+- Pulls the currently deployed dev image from Amazon ECR.
+- Promotes image tags (`vX.Y.Z`, `prod-latest`), pushes to ECR, and serves on production without building from source.
+- Polls live production healthcheck until HTTP 200 is confirmed.
 
 ---
 
-## Testing & Verification
+## 12. Agent Extension Pack (Module 5 & Open Standards)
 
-All test suites execute in isolated container environments:
+Personal Lifecycle Tracker packages an Agent Extension Pack conforming to the **Agent Plugins 1.0/1.1 Open Standard** (`agent-plugins.org` / AAIF) and **Zoomcamp Module 5**:
 
-```bash
-# Run all tests (Backend unit & integration, Frontend Vitest, E2E Playwright)
-make test
-
-# Run backend tests only
-make test-backend
-
-# Run backend integration tests with PostgreSQL
-make test-integration
-
-# Run frontend unit tests
-make test-frontend
-
-# Run frontend typecheck & lint
-make lint
-
-# Run Playwright E2E browser tests
-make test-e2e
-```
+- **Manifest**: [`plugin.json`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/plugin.json) (closed schema, semantic versioning).
+- **Connection Layer**: [`mcp.json`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/mcp.json) & [`mcp-server/server.py`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/mcp-server/server.py) (stdio transport).
+- **Reusable Workflows**: [`skills/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/skills/) and [`agent-capabilities/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/agent-capabilities/) (`domain-workflow`, `review-api-change`, `debug-ci-failure`).
+- **Guardrails & Hooks**: [`agent-hooks/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/agent-hooks/) and [`com.google.antigravity/hooks/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/com.google.antigravity/hooks/) (`pre-tool-guardrail.sh`, `post-tool-audit.sh`).
+- **Specialist Personas**: [`custom-agent/specialist.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/custom-agent/specialist.md) and [`custom-agent/agent.py`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/custom-agent/agent.py).
+- **Security & Permissions**: [`docs/permissions.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/permissions.md).
+- **6-Step Interactive Demo Script**: [`docs/demo.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/demo.md).
+- **Automated Conformance Scorecard**: [`_docs/agent-extension-pack-evaluation.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/_docs/agent-extension-pack-evaluation.md) (**100% Score — 56/56 checks passed**).
 
 ---
 
-## On-Call Engineer & Autonomous Incident Response
+## 13. Security, Audit & DevOps Hardening
 
-The repository includes an autonomous on-call monitoring and incident remediation pipeline under [`on-call-engineer/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/on-call-engineer/README.md):
+Comprehensive security audits and hardening artifacts under [`security/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/security/) and [`ops/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/ops/):
+- [`security/pr-audit.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/security/pr-audit.md): PR Security Audit across OWASP API Top 10 risks.
+- [`security/deterministic-scan.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/security/deterministic-scan.md): Deterministic SAST (Semgrep, Bandit, npm audit, Trufflehog - 0 High / 0 Critical).
+- [`security/agent-extension-security.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/security/agent-extension-security.md): Security analysis of MCP tools, subagents, and hooks.
+- [`security/ai-tool-data-policy.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/security/ai-tool-data-policy.md): AI tool governance, human review gates, and zero data leakage.
+- [`ops/diagnosis.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/ops/diagnosis.md): Operational diagnosis output with Loki logs, Tempo traces, and metric resolution.
+- [`ops/runbook.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/ops/runbook.md): Production on-call triage procedures, disaster recovery, and rollbacks.
 
-- **Alert Poller** ([`on-call-engineer/poll-alerts.py`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/on-call-engineer/poll-alerts.py)): Continuously polls the Prometheus alert API (`http://localhost:9091/api/v1/alerts`) every minute.
-- **Headless Agent Dispatch**: When an alert fires, details are normalized to [`payload-schema.json`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/on-call-engineer/payload-schema.json) and dispatched to a headless coding agent (`agy`, `claude -p`, or autonomous incident responder loop).
-- **Code-Enforced Autonomy**: Permissions are enforced outside the model via [`autonomy-policy.json`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/on-call-engineer/autonomy-policy.json) and [`authorize-action`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/on-call-engineer/scripts/authorize-action).
+---
 
-```bash
-# Run continuous alert poller (every 60s)
-make on-call-poll
+## 14. Course Evaluation Criteria Compliance Matrix
 
-# Run verification suite proving alert detection, prompt rendering, and agent dispatch
-make on-call-verify
-```
+| # | Zoomcamp Project Criterion | Required Deliverable | Status | Evidence / Verification Path |
+|---|---|---|---|---|
+| **1** | **Problem Description** (2 pts) | Problem, functionality & expected behavior described | `2/2` | Section 1, [`product-spec.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/product-spec.md) |
+| **2** | **AI-Assisted Workflow** (2 pts) | Prompts, task delegation, context files, manual review | `2/2` | Section 3, [`docs/ai-tools-usage-and-review.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/ai-tools-usage-and-review.md) |
+| **3** | **Technologies & Architecture** (2 pts) | Frontend, backend, DB, containerization, CI/CD explained | `2/2` | Section 2, [`docs/deployment/README.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/README.md) |
+| **4** | **Frontend Implementation** (3 pts) | Functional, centralized API client, Vitest tests | `3/3` | `frontend/src/services/api.ts`, `make test-frontend` |
+| **5** | **API Contract** (2 pts) | OpenAPI reflects frontend requirements, used as contract | `2/2` | [`contracts/openapi.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/contracts/openapi.yaml), [`openapi.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/openapi.yaml) |
+| **6** | **Backend Implementation** (3 pts) | Well structured, follows OpenAPI, unit & integration tests | `3/3` | `backend/app/`, `make test-backend`, `make test-integration` |
+| **7** | **Database Integration** (2 pts) | PostgreSQL integrated, multi-environment support (dev/prod) | `2/2` | `backend/app/database.py`, `backend/app/db_models.py` |
+| **8** | **Containerization** (2 pts) | Full system runs via Docker Compose with clear docs | `2/2` | `docker-compose.yaml`, `docker-compose.yml`, `make up` |
+| **9** | **Integration Testing** (2 pts) | Separated integration tests covering key workflows | `2/2` | `backend/tests/integration/` (27 tests), `e2e/` (17 tests) |
+| **10**| **Deployment** (2 pts) | Deployed to cloud with proof of deployment / IaC | `2/2` | Render & AWS Terraform, CloudFormation, Section 10 |
+| **11**| **CI/CD Pipeline** (2 pts) | Automated tests, two-stage ECR, dev/prod promotion | `2/2` | `.github/workflows/ci.yml`, `promote-dev-to-prod.yml` |
+| **12**| **Agent Extension Pack** (2 pts) | Instructions, workflow, subagent, MCP, hook, permissions | `2/2` | `plugin.json`, `mcp.json`, `skills/`, `docs/demo.md` (100% score) |
+| **13**| **Security, Audit & Hardening** (2 pts)| PR audit, deterministic scan, agent security, ops diagnosis | `2/2` | [`security/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/security/), [`ops/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/ops/) |
+| **14**| **Reproducibility** (2 pts) | Clear instructions to set up, test, and run end to end | `2/2` | Sections 4, 5, 6, 7, [`Makefile`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/Makefile) |

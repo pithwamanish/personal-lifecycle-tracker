@@ -1,0 +1,21 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": ".-extension-pack",
+  "version": "1.0.0",
+  "description": "Agent extension pack providing domain skills, MCP servers, and guardrail hooks adhering to the Agent Plugins open standard",
+  "author": {
+    "name": "AI-Native Engineering Team"
+  },
+  "license": "MIT",
+  "keywords": [
+    "agent-plugins",
+    "ai-native",
+    "spec-driven",
+    "mcp"
+  ],
+  "extensions": {
+    "com.google.antigravity": {
+      "hooks": "com.google.antigravity/hooks/hooks.json"
+    }
+  }
+}

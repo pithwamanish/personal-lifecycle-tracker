@@ -1,0 +1,5 @@
+{
+  "description": "Lifecycle hooks for safety guardrails and audit logging",
+  "preToolCall": "com.antigravity.client/hooks/pre-tool-guardrail.sh",
+  "postToolCall": "com.antigravity.client/hooks/post-tool-audit.sh"
+}

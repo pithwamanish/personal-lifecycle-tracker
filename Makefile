@@ -177,3 +177,27 @@ on-call-verify:
 
 on-call-simulate-cloud:
 	bash on-call-engineer/cloud-simulator/scripts/run-cloud-simulation
+
+# Local Kubernetes Deployment with Kind (Homework 3)
+KIND_CLUSTER_NAME ?= lifecycle-cluster
+
+kind-up:
+	kind create cluster --name $(KIND_CLUSTER_NAME) || true
+
+kind-load:
+	docker build -t personal-lifecycle-backend:latest ./backend
+	docker build -t personal-lifecycle-frontend:latest -f frontend/Dockerfile --target prod ./frontend
+	kind load docker-image personal-lifecycle-backend:latest --name $(KIND_CLUSTER_NAME)
+	kind load docker-image personal-lifecycle-frontend:latest --name $(KIND_CLUSTER_NAME)
+
+kind-deploy:
+	kubectl apply -k k8s/
+
+kind-verify:
+	kubectl rollout status deployment/lifecycle-postgres --timeout=90s
+	kubectl rollout status deployment/lifecycle-backend --timeout=90s
+	kubectl rollout status deployment/lifecycle-frontend --timeout=90s
+
+kind-down:
+	kind delete cluster --name $(KIND_CLUSTER_NAME)
+

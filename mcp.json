@@ -1,0 +1,14 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "project-tools": {
+      "type": "stdio",
+      "command": "python3",
+      "args": ["./mcp-server/server.py"],
+      "env": {
+        "PROJECT_ROOT": "."
+      },
+      "cwd": "${PLUGIN_ROOT}"
+    }
+  }
+}
