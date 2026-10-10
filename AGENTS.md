@@ -283,5 +283,27 @@ Execute all validations and formatting inside Docker without host dependencies:
   - Dev CloudFormation: [`cloudformation/aws-ec2-compose.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose.yaml) | Prod CloudFormation Copy: [`cloudformation/aws-ec2-compose-prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose-prod.yaml)
   - Validation: `make tf-validate` (validates all Terraform environments) and `make cf-validate` (validates both CloudFormation templates)
 
+---
+
+## 8. Two-Stage Container Registry Pipeline (Amazon ECR)
+
+The CI/CD pipeline decouples image creation from serving:
+
+1. **Build Stage (`build-and-push-ecr`)**:
+   - Compiles container images (`backend` and `frontend`).
+   - Tags each image using the `YYYYMMDD-HHMMSS-shortsha` pattern (e.g. `20260818-163457-83242da`) and pushes to Amazon ECR.
+   - Records the deployed image tag in AWS SSM Parameter Store (`/personal-lifecycle/${TARGET_ENV}/image_tag`).
+
+2. **Deploy Stage (`deploy`)**:
+   - Pulls pre-built images from Amazon ECR.
+   - Serves containers via Docker Compose (`docker compose -f docker-compose.prod.yml up -d --no-build`). Zero image building occurs on the deployment host.
+   - Validates live `/health` endpoint (HTTP 200).
+
+3. **Dev to Production Image Promotion (`promote-dev-to-prod.yml`)**:
+   - Discovers and pulls the currently deployed dev image from Amazon ECR.
+   - Re-tags the verified dev image with the promotion timestamp tag (`YYYYMMDD-HHMMSS-shortsha`), semantic release tag (`vX.Y.Z`), and `prod-latest`.
+   - Pushes promoted tags to ECR and deploys to production without building from source.
+
 regularly commit code to git
+
 

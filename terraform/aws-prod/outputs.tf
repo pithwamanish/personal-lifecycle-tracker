@@ -37,3 +37,14 @@ output "github_oidc_role_arn" {
   description = "ARN of the IAM role assumed by GitHub Actions via OIDC"
   value       = var.enable_github_oidc ? aws_iam_role.github_actions_render_deployer[0].arn : null
 }
+
+output "ecr_backend_repository_url" {
+  description = "ECR Repository URL for Backend images"
+  value       = aws_ecr_repository.backend.repository_url
+}
+
+output "ecr_frontend_repository_url" {
+  description = "ECR Repository URL for Frontend images"
+  value       = aws_ecr_repository.frontend.repository_url
+}
+

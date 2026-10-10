@@ -57,6 +57,33 @@ prod-ps:
 prod-logs:
 	docker compose -f docker-compose.prod.yml logs -f
 
+# Registry (ECR) Image Stages & Pattern Tagging (YYYYMMDD-HHMMSS-shortsha)
+IMAGE_TAG ?= $(shell date -u +'%Y%m%d-%H%M%S')-$(shell git rev-parse --short=7 HEAD 2>/dev/null || echo "latest")
+ECR_REGISTRY ?= localhost:5000
+BACKEND_REPO ?= personal-lifecycle-tracker-backend
+FRONTEND_REPO ?= personal-lifecycle-tracker-frontend
+
+ecr-tag:
+	@echo $(IMAGE_TAG)
+
+build-images:
+	docker build --target base -t $(ECR_REGISTRY)/$(BACKEND_REPO):$(IMAGE_TAG) -t $(ECR_REGISTRY)/$(BACKEND_REPO):latest ./backend
+	docker build --target prod -t $(ECR_REGISTRY)/$(FRONTEND_REPO):$(IMAGE_TAG) -t $(ECR_REGISTRY)/$(FRONTEND_REPO):latest ./frontend
+
+push-images:
+	docker push $(ECR_REGISTRY)/$(BACKEND_REPO):$(IMAGE_TAG)
+	docker push $(ECR_REGISTRY)/$(BACKEND_REPO):latest
+	docker push $(ECR_REGISTRY)/$(FRONTEND_REPO):$(IMAGE_TAG)
+	docker push $(ECR_REGISTRY)/$(FRONTEND_REPO):latest
+
+pull-images:
+	docker pull $(ECR_REGISTRY)/$(BACKEND_REPO):$(IMAGE_TAG)
+	docker pull $(ECR_REGISTRY)/$(FRONTEND_REPO):$(IMAGE_TAG)
+
+prod-serve:
+	BACKEND_IMAGE=$(ECR_REGISTRY)/$(BACKEND_REPO):$(IMAGE_TAG) FRONTEND_IMAGE=$(ECR_REGISTRY)/$(FRONTEND_REPO):$(IMAGE_TAG) docker compose -f docker-compose.prod.yml up -d --no-build
+
+
 # Infrastructure as Code (IaC) - Zero Host Dependencies via Docker Containers
 TF_IMAGE ?= hashicorp/terraform:1.7.5
 AWS_CLI_IMAGE ?= amazon/aws-cli:latest

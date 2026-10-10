@@ -86,7 +86,7 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=$APP_DIR
-ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml up -d --build
+ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml up -d
 ExecStop=/usr/bin/docker compose -f docker-compose.prod.yml down
 TimeoutStartSec=600
 
@@ -97,9 +97,31 @@ EOF
 systemctl daemon-reload
 systemctl enable personal-lifecycle-tracker.service
 
-# 6. Build and Launch Production Container Cluster
-echo "Launching production Docker Compose stack..."
-docker compose -f docker-compose.prod.yml up -d --build
+# 6. Authenticate to ECR, Pull Images from Registry and Serve (Zero Host Build)
+echo "Authenticating to Amazon ECR via instance IAM role..."
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || true)
+if [ -n "$AWS_ACCOUNT_ID" ]; then
+    ECR_REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com"
+    echo "Logging into Amazon ECR: $ECR_REGISTRY..."
+    aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "$ECR_REGISTRY" || true
+
+    # Check for deployed image tag in SSM Parameter Store
+    DEPLOYED_TAG=$(aws ssm get-parameter --name "/personal-lifecycle/${ENVIRONMENT}/image_tag" --query Parameter.Value --output text 2>/dev/null || true)
+    if [ -n "$DEPLOYED_TAG" ]; then
+        echo "Configuring deployed ECR image tag from SSM: $DEPLOYED_TAG"
+        echo "BACKEND_IMAGE=$ECR_REGISTRY/${PROJECT_NAME}-backend-${ENVIRONMENT}:$DEPLOYED_TAG" >> "$APP_DIR/.env"
+        echo "FRONTEND_IMAGE=$ECR_REGISTRY/${PROJECT_NAME}-frontend-${ENVIRONMENT}:$DEPLOYED_TAG" >> "$APP_DIR/.env"
+    fi
+fi
+
+echo "Pulling container images from registry..."
+if docker compose -f docker-compose.prod.yml pull; then
+    echo "Images pulled successfully from container registry. Serving containers..."
+    docker compose -f docker-compose.prod.yml up -d
+else
+    echo "Notice: Registry pull unavailable or first bootstrap; fallback to local container build..."
+    docker compose -f docker-compose.prod.yml up -d --build
+fi
 
 # 7. Healthcheck Verification
 echo "Verifying service health on port ${APP_PORT}..."

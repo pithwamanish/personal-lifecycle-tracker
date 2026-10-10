@@ -194,6 +194,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-ssm-role'
@@ -294,7 +295,7 @@ Resources:
           Type=oneshot
           RemainAfterExit=yes
           WorkingDirectory=$APP_DIR
-          ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml up -d --build
+          ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml up -d
           ExecStop=/usr/bin/docker compose -f docker-compose.prod.yml down
           TimeoutStartSec=600
 
@@ -305,7 +306,12 @@ Resources:
           systemctl daemon-reload
           systemctl enable personal-lifecycle-tracker.service
 
-          docker compose -f docker-compose.prod.yml up -d --build
+          echo "Pulling images from registry..."
+          if docker compose -f docker-compose.prod.yml pull; then
+              docker compose -f docker-compose.prod.yml up -d
+          else
+              docker compose -f docker-compose.prod.yml up -d --build
+          fi
 
           echo "=== Provisioning Complete at $(date) ==="
       Tags:

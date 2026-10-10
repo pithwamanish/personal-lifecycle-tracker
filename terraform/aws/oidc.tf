@@ -92,3 +92,63 @@ resource "aws_iam_role_policy_attachment" "github_actions_render_secrets" {
   role       = aws_iam_role.github_actions_render_deployer[0].name
   policy_arn = aws_iam_policy.render_secrets_reader[0].arn
 }
+
+# Policy allowing the GitHub Actions OIDC role to push images to ECR and manage deployment parameters
+resource "aws_iam_policy" "github_actions_ecr_deploy" {
+  count = var.enable_github_oidc ? 1 : 0
+
+  name        = "${var.project_name}-ecr-deploy-policy-${var.environment}"
+  description = "Allows GitHub Actions OIDC role to push and pull ECR images and manage deployment parameters"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:GetRepositoryPolicy",
+          "ecr:DescribeRepositories",
+          "ecr:ListImages",
+          "ecr:DescribeImages",
+          "ecr:BatchGetImage",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload",
+          "ecr:PutImage",
+          "ecr:CreateRepository"
+        ]
+        Resource = [
+          "arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/${var.project_name}*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:PutParameter",
+          "ssm:GetParameter",
+          "ssm:GetParameters"
+        ]
+        Resource = [
+          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/personal-lifecycle/*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions_ecr_deploy" {
+  count = var.enable_github_oidc ? 1 : 0
+
+  role       = aws_iam_role.github_actions_render_deployer[0].name
+  policy_arn = aws_iam_policy.github_actions_ecr_deploy[0].arn
+}
+

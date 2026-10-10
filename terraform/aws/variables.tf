@@ -106,3 +106,16 @@ variable "github_repo" {
   type        = string
   default     = "pithwamanish/personal-lifecycle-tracker"
 }
+
+variable "ecr_backend_repository_name" {
+  description = "Optional custom name for the backend ECR repository"
+  type        = string
+  default     = null
+}
+
+variable "ecr_frontend_repository_name" {
+  description = "Optional custom name for the frontend ECR repository"
+  type        = string
+  default     = null
+}
+

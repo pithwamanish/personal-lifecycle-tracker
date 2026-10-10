@@ -43,6 +43,7 @@ flowchart TD
 2. **Shared AWS Account OIDC Safety**: Both modules support `existing_oidc_provider_arn` to prevent duplicate GitHub Actions OIDC provider conflicts when deployed into the same AWS account.
 3. **Free-Tier Eligible**: Runs on `t3.micro` or `t4g.micro` with 20 GB GP3 encrypted storage ($0/month under AWS Free Tier).
 4. **Zero Open SSH Ports Needed**: Comes pre-configured with an IAM Role with `AmazonSSMManagedInstanceCore` for AWS Systems Manager Session Manager access.
+5. **Amazon ECR Container Registry Integration**: Includes declarative ECR repositories (`personal-lifecycle-tracker-backend` and `personal-lifecycle-tracker-frontend`) with scan-on-push and automated lifecycle retention policies. EC2 instance profiles include `AmazonEC2ContainerRegistryReadOnly` so hosts pull pre-built images and serve them without host compilation.
 
 ---
 

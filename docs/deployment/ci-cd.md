@@ -10,8 +10,8 @@ This guide details the continuous integration and continuous deployment (CI/CD) 
 flowchart TD
     subgraph Trigger["Pipeline Triggers"]
         PR["Pull Request to main or dev"]
-        PushDev["Push to dev / develop -> Deploy Dev"]
-        PushMain["Push to main -> Deploy Production Copy"]
+        PushDev["Push to dev / develop -> Build & Deploy Dev"]
+        PushMain["Push to main -> Build & Deploy Production"]
         Dispatch["Workflow Dispatch (Select Env: dev / production)"]
     end
 
@@ -33,21 +33,33 @@ flowchart TD
         BuildStack --> StartStack --> WaitHealth --> IntegTests --> E2ETests --> TearDown
     end
 
-    subgraph DeployGate["Phase 3: Multi-Environment Render Deployment"]
+    subgraph BuildStage["Phase 3: Build & Push to Registry (ECR)"]
         direction TB
         ResolveEnv["Resolve TARGET_ENV\n(main -> production, dev -> dev)"]
-        OIDCAuth["GitHub OIDC Token Exchange\n(id-token: write)\nAssume AWS IAM Role"]
-        FetchSecrets["Fetch Render Credentials\n(AWS Secrets Manager / SSM)"]
-        TriggerRender["Trigger Render Deployment\n(Dev or Production Service)"]
+        GenTag["Generate Pattern Tag:\nYYYYMMDD-HHMMSS-shortsha\n(e.g. 20260818-163457-83242da)"]
+        AuthECR["OIDC Auth & ECR Login"]
+        BuildImgs["Build Backend (FastAPI) & Frontend (Caddy) Images"]
+        PushECR["Push Images to Amazon ECR\n(:tag, :target-latest, :latest)"]
+        RecordSSM["Record Image Tag in SSM Parameter Store\n(/personal-lifecycle/dev/image_tag)"]
+
+        ResolveEnv --> GenTag --> AuthECR --> BuildImgs --> PushECR --> RecordSSM
+    end
+
+    subgraph DeployStage["Phase 4: Deploy & Serve from Registry"]
+        direction TB
+        PullImgs["Pull Image from Registry (ECR)\n(Zero Host Build)"]
+        ServeStack["Serve Application via Docker Compose / VM\n(docker compose up -d --no-build)"]
+        TriggerRender["Trigger Render Deployment (Optional Hook/API)"]
         ValidateHealth["Poll & Validate Environment Health Endpoint\n(Dev or Prod Frontend :80/health)"]
 
-        ResolveEnv --> OIDCAuth --> FetchSecrets --> TriggerRender --> ValidateHealth
+        PullImgs --> ServeStack --> TriggerRender --> ValidateHealth
     end
 
     Trigger --> ParallelTests
     BackendJob --> ComposeStack
     FrontendJob --> ComposeStack
-    ComposeStack --> DeployGate
+    ComposeStack --> BuildStage
+    BuildStage --> DeployStage
 ```
 
 ---
@@ -74,11 +86,26 @@ To optimize feedback loops and token consumption:
 
 ### D. Automated Health Endpoint Validation
 - Triggering a deployment is only half the release contract: the pipeline must verify that the deployed service actually boots, connects to the database, and serves traffic.
-- The pipeline enters a resilient polling loop querying the live Render healthcheck endpoint (e.g., `https://personal-lifecycle-frontend.onrender.com/health`):
+- The pipeline enters a resilient polling loop querying the live healthcheck endpoint (e.g., `http://localhost:8088/health` or live URL):
   - Checks every 10 seconds for up to 30 attempts (5 minutes).
   - Verifies HTTP 200 OK status code.
   - Inspects the JSON body to verify `"status": "healthy"` and database connectivity.
   - Fails the build if the health endpoint fails to stabilize within the threshold.
+
+### E. Two-Stage Build & Deploy (ECR Registry Integration)
+To eliminate redundant compilation on production hosts and ensure 100% artifact reproducibility:
+1. **Split into Two Independent Stages**:
+   - **Build Stage (`build-and-push-ecr`)**: Compiles backend (`./backend`) and frontend (`./frontend`) Docker images once, assigns deterministic tags, and pushes artifacts to Amazon ECR.
+   - **Deploy Stage (`deploy`)**: Pulls pre-built images directly from Amazon ECR and serves them via Docker Compose (`docker compose -f docker-compose.prod.yml up -d --no-build`), completely eliminating image builds during the deployment phase.
+2. **Deterministic Timestamp-ShortSHA Image Tagging**:
+   - Every image is tagged using the exact `YYYYMMDD-HHMMSS-shortsha` pattern:
+     ```bash
+     TAG="$(date -u +'%Y%m%d-%H%M%S')-$(git rev-parse --short=7 HEAD)"
+     # Example: 20260818-163457-83242da
+     ```
+   - In addition to the immutable timestamp tag, images are also tagged with `${TARGET_ENV}-latest` and `latest`.
+   - The deployed image tag is persisted to AWS SSM Parameter Store (`/personal-lifecycle/${TARGET_ENV}/image_tag`) for automated discovery by downstream promotion workflows.
+
 
 ---
 
@@ -194,14 +221,16 @@ flowchart TD
         ResolveTag --> ExecMerge --> GitTag --> GitPush --> GHRelease
     end
 
-    subgraph Phase3["Phase 3: Production Deployment & Health Verification"]
+    subgraph Phase3["Phase 3: Dev Image Promotion to Prod & Serve"]
         direction TB
-        OIDCAuth["Keyless OIDC Auth (AWS IAM Role Assumption)"]
-        FetchProdSecrets["Retrieve Production Secrets (personal-lifecycle/render-production)"]
-        TriggerProd["Trigger Render Production Deployment (Deploy Hook / REST API)"]
+        OIDCAuth["Keyless OIDC Auth (AWS STS / ECR Login)"]
+        PullDevImg["Pull Currently Deployed Dev Image from ECR\n(Discovered via SSM /personal-lifecycle/dev/image_tag)"]
+        TagProd["Tag Image with Pattern:\nYYYYMMDD-HHMMSS-shortsha\n(e.g. 20260818-163457-83242da) & vX.Y.Z"]
+        PushProdECR["Push Promoted Images to Amazon ECR\n(:prod_tag, :vX.Y.Z, :prod-latest)"]
+        ServeProd["Serve Promoted Containers on Production\n(docker compose -f docker-compose.prod.yml up -d --no-build)"]
         PollProdHealth["Poll Live Health Endpoint (30 attempts / 10s intervals)\nValidate HTTP 200 & 'status: healthy'"]
 
-        OIDCAuth --> FetchProdSecrets --> TriggerProd --> PollProdHealth
+        OIDCAuth --> PullDevImg --> TagProd --> PushProdECR --> ServeProd --> PollProdHealth
     end
 
     Inputs --> Phase1
@@ -217,7 +246,8 @@ flowchart TD
 | `target_branch` | `string` | `main` | Target production branch receiving the release merge. |
 | `version_tag` | `string` | `""` | Specific release tag (e.g. `v1.1.0`). If left blank, the workflow automatically increments the patch version from the latest tag (e.g., `v1.0.0` → `v1.0.1`). |
 | `release_title` | `string` | `""` | Custom GitHub Release title (defaults to `Production Release <version>`). |
-| `deploy_to_production` | `boolean` | `true` | Immediately triggers deployment to the Render Production environment after branch push. |
+| `deploy_to_production` | `boolean` | `true` | Immediately deploys promoted dev images to the Production environment. |
+| `dev_image_tag` | `string` | `""` | Specific dev ECR image tag to promote (leave blank to auto-detect currently deployed dev image via SSM). |
 | `skip_tests` | `boolean` | `false` | Bypasses automated test gates before promotion (**strongly discouraged** for production releases). |
 | `dry_run` | `boolean` | `false` | Simulates branch merge, test execution, tag calculation, and changelog generation without pushing to remote or triggering production deployment. |
 

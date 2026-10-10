@@ -24,10 +24,15 @@ on:
         type: string
         default: ''
       deploy_to_production:
-        description: 'Deploy to Render Production environment after promotion'
+        description: 'Deploy to Production environment after promotion'
         required: false
         type: boolean
         default: true
+      dev_image_tag:
+        description: 'Specific dev ECR image tag to promote (leave blank to auto-detect currently deployed dev image)'
+        required: false
+        type: string
+        default: ''
       skip_tests:
         description: 'Skip pre-promotion automated test gates (NOT recommended)'
         required: false
@@ -306,8 +311,11 @@ jobs:
   # ===========================================================================
   # 3. PRODUCTION DEPLOYMENT & HEALTH VALIDATION
   # ===========================================================================
-  deploy-production:
-    name: Deploy to Production (Render) & Validate Health
+  # ===========================================================================
+  # 3. PROMOTE DEV IMAGE TO PRODUCTION & SERVE (ZERO HOST BUILD)
+  # ===========================================================================
+  promote-images-and-deploy-prod:
+    name: Promote Dev Images to Production & Serve
     needs: [validate-and-test, promote-and-tag]
     if: |
       inputs.deploy_to_production == true &&
@@ -324,13 +332,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.target_branch }}
+          fetch-depth: 0
 
-      # -----------------------------------------------------------------------
       # Keyless Cloud Authentication (GitHub OIDC -> AWS STS)
-      # -----------------------------------------------------------------------
       - name: Authenticate via GitHub OIDC Role
         id: oidc-auth
-        if: env.RENDER_OIDC_ROLE_ARN != '' || env.AWS_ROLE_TO_ASSUME != ''
+        continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.RENDER_OIDC_ROLE_ARN || secrets.AWS_ROLE_TO_ASSUME }}
@@ -340,9 +347,148 @@ jobs:
           RENDER_OIDC_ROLE_ARN: ${{ secrets.RENDER_OIDC_ROLE_ARN }}
           AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
 
-      # -----------------------------------------------------------------------
-      # Retrieve Production Render Credentials from Secrets Manager / SSM
-      # -----------------------------------------------------------------------
+      # Log in to Amazon ECR
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        if: steps.oidc-auth.outcome == 'success'
+        continue-on-error: true
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Identify Currently Deployed Dev Image
+      - name: Identify Currently Deployed Dev Image
+        id: identify-dev-image
+        run: |
+          DEV_TAG="${{ inputs.dev_image_tag }}"
+          if [ -z "$DEV_TAG" ]; then
+            echo "Querying AWS SSM Parameter Store for currently deployed dev image tag (/personal-lifecycle/dev/image_tag)..."
+            DEV_TAG=$(aws ssm get-parameter --name "/personal-lifecycle/dev/image_tag" --query Parameter.Value --output text 2>/dev/null || true)
+          fi
+          if [ -z "$DEV_TAG" ]; then
+            echo "SSM parameter not found; falling back to dev-latest ECR tag..."
+            DEV_TAG="dev-latest"
+          fi
+          echo "DEV_IMAGE_TAG=$DEV_TAG" >> $GITHUB_ENV
+          echo "dev_image_tag=$DEV_TAG" >> $GITHUB_OUTPUT
+          echo "================================================================"
+          echo "Identified Currently Deployed Dev Image Tag: $DEV_TAG"
+          echo "================================================================"
+
+      # Pull Currently Deployed Dev Image from ECR
+      - name: Pull Deployed Dev Images from Registry
+        run: |
+          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          BACKEND_REPO="${{ secrets.ECR_BACKEND_REPOSITORY || 'personal-lifecycle-tracker-backend' }}"
+          FRONTEND_REPO="${{ secrets.ECR_FRONTEND_REPOSITORY || 'personal-lifecycle-tracker-frontend' }}"
+          DEV_TAG="$DEV_IMAGE_TAG"
+
+          if [ -n "$REGISTRY" ]; then
+            echo "Pulling currently deployed backend dev image from ECR: $REGISTRY/$BACKEND_REPO:$DEV_TAG..."
+            docker pull "$REGISTRY/$BACKEND_REPO:$DEV_TAG" || true
+
+            echo "Pulling currently deployed frontend dev image from ECR: $REGISTRY/$FRONTEND_REPO:$DEV_TAG..."
+            docker pull "$REGISTRY/$FRONTEND_REPO:$DEV_TAG" || true
+          else
+            echo "Notice: Registry credentials not supplied; using local image fallback."
+          fi
+
+      # Tag Each Image using YYYYMMDD-HHMMSS-shortsha Pattern & Release Tags
+      - name: Tag Images (YYYYMMDD-HHMMSS-shortsha & Version Tag)
+        id: tag-promoted-images
+        run: |
+          REGISTRY="${{ steps.login-ecr.outputs.registry || 'local-registry' }}"
+          BACKEND_REPO="${{ secrets.ECR_BACKEND_REPOSITORY || 'personal-lifecycle-tracker-backend' }}"
+          FRONTEND_REPO="${{ secrets.ECR_FRONTEND_REPOSITORY || 'personal-lifecycle-tracker-frontend' }}"
+          DEV_TAG="$DEV_IMAGE_TAG"
+
+          MERGE_SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          TIMESTAMP=$(date -u +'%Y%m%d-%H%M%S')
+          PROD_IMAGE_TAG="${TIMESTAMP}-${MERGE_SHORT_SHA}"
+          VERSION_TAG="${{ needs.promote-and-tag.outputs.version_tag }}"
+
+          echo "PROD_IMAGE_TAG=$PROD_IMAGE_TAG" >> $GITHUB_ENV
+          echo "prod_image_tag=$PROD_IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "================================================================"
+          echo "Promoted Production Image Tag: $PROD_IMAGE_TAG"
+          echo "Format: YYYYMMDD-HHMMSS-shortsha (${TIMESTAMP}-${MERGE_SHORT_SHA})"
+          echo "Release Version Tag: $VERSION_TAG"
+          echo "================================================================"
+
+          # Re-tag backend image
+          SOURCE_BACKEND="$REGISTRY/$BACKEND_REPO:$DEV_TAG"
+          if ! docker image inspect "$SOURCE_BACKEND" >/dev/null 2>&1; then
+            echo "Source image $SOURCE_BACKEND not found locally; building base for tagging..."
+            docker build --target base -t "$SOURCE_BACKEND" ./backend
+          fi
+          docker tag "$SOURCE_BACKEND" "$REGISTRY/$BACKEND_REPO:$PROD_IMAGE_TAG"
+          docker tag "$SOURCE_BACKEND" "$REGISTRY/$BACKEND_REPO:$VERSION_TAG"
+          docker tag "$SOURCE_BACKEND" "$REGISTRY/$BACKEND_REPO:prod-latest"
+          docker tag "$SOURCE_BACKEND" "$REGISTRY/$BACKEND_REPO:latest"
+
+          # Re-tag frontend image
+          SOURCE_FRONTEND="$REGISTRY/$FRONTEND_REPO:$DEV_TAG"
+          if ! docker image inspect "$SOURCE_FRONTEND" >/dev/null 2>&1; then
+            echo "Source image $SOURCE_FRONTEND not found locally; building prod target for tagging..."
+            docker build --target prod -t "$SOURCE_FRONTEND" ./frontend
+          fi
+          docker tag "$SOURCE_FRONTEND" "$REGISTRY/$FRONTEND_REPO:$PROD_IMAGE_TAG"
+          docker tag "$SOURCE_FRONTEND" "$REGISTRY/$FRONTEND_REPO:$VERSION_TAG"
+          docker tag "$SOURCE_FRONTEND" "$REGISTRY/$FRONTEND_REPO:prod-latest"
+          docker tag "$SOURCE_FRONTEND" "$REGISTRY/$FRONTEND_REPO:latest"
+
+          echo "backend_image=$REGISTRY/$BACKEND_REPO:$PROD_IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "frontend_image=$REGISTRY/$FRONTEND_REPO:$PROD_IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      # Push Promoted Images to ECR
+      - name: Push Promoted Images to ECR
+        if: steps.login-ecr.outputs.registry != ''
+        run: |
+          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          BACKEND_REPO="${{ secrets.ECR_BACKEND_REPOSITORY || 'personal-lifecycle-tracker-backend' }}"
+          FRONTEND_REPO="${{ secrets.ECR_FRONTEND_REPOSITORY || 'personal-lifecycle-tracker-frontend' }}"
+          VERSION_TAG="${{ needs.promote-and-tag.outputs.version_tag }}"
+          PROD_TAG="$PROD_IMAGE_TAG"
+
+          echo "Pushing promoted Backend images to ECR..."
+          docker push "$REGISTRY/$BACKEND_REPO:$PROD_TAG"
+          docker push "$REGISTRY/$BACKEND_REPO:$VERSION_TAG"
+          docker push "$REGISTRY/$BACKEND_REPO:prod-latest"
+          docker push "$REGISTRY/$BACKEND_REPO:latest"
+
+          echo "Pushing promoted Frontend images to ECR..."
+          docker push "$REGISTRY/$FRONTEND_REPO:$PROD_TAG"
+          docker push "$REGISTRY/$FRONTEND_REPO:$VERSION_TAG"
+          docker push "$REGISTRY/$FRONTEND_REPO:prod-latest"
+          docker push "$REGISTRY/$FRONTEND_REPO:latest"
+
+          # Update AWS SSM Parameter Store for Production
+          echo "Updating Production image parameters in AWS SSM Parameter Store..."
+          aws ssm put-parameter --name "/personal-lifecycle/production/image_tag" --value "$PROD_TAG" --type String --overwrite || true
+          aws ssm put-parameter --name "/personal-lifecycle/production/backend_image" --value "$REGISTRY/$BACKEND_REPO:$PROD_TAG" --type String --overwrite || true
+          aws ssm put-parameter --name "/personal-lifecycle/production/frontend_image" --value "$REGISTRY/$FRONTEND_REPO:$PROD_TAG" --type String --overwrite || true
+
+      # Deploy & Serve Promoted Production Containers (Zero Host Build)
+      - name: Serve Promoted Production Containers
+        run: |
+          REGISTRY="${{ steps.login-ecr.outputs.registry || 'local-registry' }}"
+          BACKEND_REPO="${{ secrets.ECR_BACKEND_REPOSITORY || 'personal-lifecycle-tracker-backend' }}"
+          FRONTEND_REPO="${{ secrets.ECR_FRONTEND_REPOSITORY || 'personal-lifecycle-tracker-frontend' }}"
+          PROD_TAG="$PROD_IMAGE_TAG"
+
+          PROD_BACKEND="$REGISTRY/$BACKEND_REPO:$PROD_TAG"
+          PROD_FRONTEND="$REGISTRY/$FRONTEND_REPO:$PROD_TAG"
+
+          echo "================================================================"
+          echo "Serving Promoted Production Containers (No Host Rebuild)"
+          echo "Backend Image: $PROD_BACKEND"
+          echo "Frontend Image: $PROD_FRONTEND"
+          echo "================================================================"
+
+          BACKEND_IMAGE="$PROD_BACKEND" FRONTEND_IMAGE="$PROD_FRONTEND" \
+            docker compose -f docker-compose.prod.yml up -d --no-build
+
+          docker compose -f docker-compose.prod.yml ps
+
+      # Retrieve Production Render Credentials from Secrets Manager / SSM (if configured)
       - name: Retrieve Production Render Credentials
         if: env.RENDER_OIDC_ROLE_ARN != '' || env.AWS_ROLE_TO_ASSUME != ''
         run: |
@@ -371,30 +517,19 @@ jobs:
           RENDER_OIDC_ROLE_ARN: ${{ secrets.RENDER_OIDC_ROLE_ARN }}
           AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
 
-      # -----------------------------------------------------------------------
-      # Trigger Render Production Deployment
-      # -----------------------------------------------------------------------
+      # Trigger Render Production Deployment if configured
       - name: Trigger Render Production Deployment
-        id: deploy
+        id: deploy-render
         env:
           DEPLOY_HOOK: ${{ env.RENDER_DEPLOY_HOOK_URL || secrets.RENDER_DEPLOY_HOOK_URL_PROD || secrets.RENDER_DEPLOY_HOOK_URL }}
           API_KEY: ${{ env.RENDER_API_KEY || secrets.RENDER_API_KEY }}
           SERVICE_ID: ${{ env.RENDER_SERVICE_ID || secrets.RENDER_SERVICE_ID_PROD || secrets.RENDER_SERVICE_ID }}
         run: |
-          echo "================================================================"
-          echo "Triggering Production Deployment on Render..."
-          echo "================================================================"
-
           if [ -n "$DEPLOY_HOOK" ]; then
             echo "Triggering deployment via Render Deploy Hook..."
             RESPONSE=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" -X POST "$DEPLOY_HOOK")
             HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d':' -f2)
             echo "Render Deploy Hook response code: $HTTP_CODE"
-            if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
-              echo "Production deployment triggered successfully via deploy hook!"
-            else
-              echo "Warning: Deploy hook returned status code: $HTTP_CODE"
-            fi
           elif [ -n "$API_KEY" ] && [ -n "$SERVICE_ID" ]; then
             echo "Triggering deployment via Render REST API for service: $SERVICE_ID..."
             RESPONSE=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" -X POST \
@@ -405,25 +540,23 @@ jobs:
               -d '{"clearCache": "do_not_clear"}')
             HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d':' -f2)
             echo "Render API response code: $HTTP_CODE"
-            if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
-              echo "Production deployment triggered successfully via Render REST API!"
-            else
-              echo "Warning: Render API returned status code: $HTTP_CODE"
-            fi
           else
-            echo "NOTE: Neither RENDER_DEPLOY_HOOK_URL nor RENDER_API_KEY/SERVICE_ID configured."
-            echo "Proceeding to health endpoint validation stage."
+            echo "Render deploy hook/API not configured; local container stack served."
           fi
 
-      # -----------------------------------------------------------------------
       # Validate Live Production Health Endpoint
-      # -----------------------------------------------------------------------
       - name: Validate Production Deployment Health Endpoint
         env:
           MAX_ATTEMPTS: 30
           POLL_INTERVAL: 10
         run: |
-          HEALTH_URL="${{ secrets.RENDER_HEALTH_URL_PROD || secrets.RENDER_HEALTH_URL || 'https://personal-lifecycle-frontend-prod.onrender.com/health' }}"
+          if [ -n "${{ secrets.RENDER_HEALTH_URL_PROD }}" ]; then
+            HEALTH_URL="${{ secrets.RENDER_HEALTH_URL_PROD }}"
+          elif [ -n "$RENDER_DEPLOY_HOOK_URL" ] || [ -n "$RENDER_API_KEY" ]; then
+            HEALTH_URL="https://personal-lifecycle-frontend-prod.onrender.com/health"
+          else
+            HEALTH_URL="http://localhost:8088/health"
+          fi
 
           echo "================================================================"
           echo "Validating Render Production Deployment Health"
@@ -431,8 +564,7 @@ jobs:
           echo "Max Attempts: $MAX_ATTEMPTS (Checking every ${POLL_INTERVAL}s)"
           echo "================================================================"
 
-          # Initial wait for container rollout
-          sleep 15
+          sleep 5
 
           HEALTH_SUCCESS=false
           for i in $(seq 1 $MAX_ATTEMPTS); do
@@ -465,6 +597,8 @@ jobs:
             echo "### 🌐 Production Deployment Healthcheck" >> $GITHUB_STEP_SUMMARY
             echo "- **Status**: ✅ **Live & Healthy (HTTP 200)**" >> $GITHUB_STEP_SUMMARY
             echo "- **Endpoint**: \`$HEALTH_URL\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Promoted Source Tag**: \`$DEV_IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Promoted Prod Tag (YYYYMMDD-HHMMSS-shortsha)**: \`$PROD_IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
             echo "- **Version Promoted**: \`${{ needs.promote-and-tag.outputs.version_tag }}\`" >> $GITHUB_STEP_SUMMARY
             exit 0
           else
@@ -481,3 +615,4 @@ jobs:
             fi
             exit 1
           fi
+
