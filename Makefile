@@ -174,3 +174,6 @@ on-call-poll:
 
 on-call-verify:
 	bash on-call-engineer/scripts/verify
+
+on-call-simulate-cloud:
+	bash on-call-engineer/cloud-simulator/scripts/run-cloud-simulation

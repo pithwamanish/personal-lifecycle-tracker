@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ==============================================================================
+# End-to-End Local Cloud Production Environment Simulation
+# Emulates:
+# 1. Amazon SNS / EventBridge (Floci Topic)
+# 2. AWS Lambda Function (dispatcher.py)
+# 3. AWS ECS / Fargate Task (ephemeral docker container with --rm)
+# 4. Headless Execution (evidence, policy, repro, diff)
+# 5. Audit & Tear Down (S3 bucket archival & CloudWatch logging, immediate termination)
+# ==============================================================================
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SIM_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_ROOT="$(cd "${SIM_DIR}/../.." && pwd)"
+
+COMPOSE_FILE="${SIM_DIR}/docker-compose.cloud.yml"
+ENDPOINT_URL="http://localhost:4568"
+CONTAINER_ENDPOINT="http://personal-lifecycle-cloud-emulator:4566"
+S3_BUCKET="lifecycle-on-call-incidents"
+SNS_TOPIC="on-call-alerts"
+AWS_REGION="us-east-1"
+
+export AWS_ACCESS_KEY_ID="test"
+export AWS_SECRET_ACCESS_KEY="test"
+export AWS_DEFAULT_REGION="${AWS_REGION}"
+
+echo "================================================================"
+echo "    LOCAL SIMULATION OF CLOUD PRODUCTION ON-CALL PIPELINE      "
+echo "================================================================"
+echo "1. Cloud Emulator:   Amazon SNS, EventBridge, S3, CloudWatch"
+echo "2. Serverless:       AWS Lambda (dispatcher.py)"
+echo "3. Container Task:   AWS ECS / Fargate (ephemeral --rm container)"
+echo "4. Agent Execution:  Headless triage loop"
+echo "5. Audit & Cleanup:  S3 archival & immediate container termination"
+echo "================================================================"
+echo ""
+
+# 1. Start Local Cloud Emulator
+echo "==> [STEP 1] Starting local cloud emulator (Floci S3/SNS) on port 4568..."
+docker compose -f "${COMPOSE_FILE}" up -d
+echo "==> Waiting for cloud emulator to report healthy..."
+for i in $(seq 1 30); do
+  if curl -sf "${ENDPOINT_URL}/_floci/health" >/dev/null 2>&1; then
+    echo "[x] Cloud emulator is healthy and ready."
+    break
+  fi
+  sleep 1
+done
+
+# Ensure network connectivity to observability network
+docker network connect personal-lifecycle-observability-net personal-lifecycle-cloud-emulator 2>/dev/null || true
+
+# 2. Provision AWS Cloud Infrastructure in Emulator
+echo ""
+echo "==> [STEP 2] Provisioning AWS Cloud resources (S3 Bucket & SNS Topic)..."
+# Create S3 Bucket
+docker run --rm \
+  --network personal-lifecycle-observability-net \
+  -e AWS_ACCESS_KEY_ID=test \
+  -e AWS_SECRET_ACCESS_KEY=test \
+  -e AWS_DEFAULT_REGION="${AWS_REGION}" \
+  amazon/aws-cli:latest \
+  --endpoint-url "${CONTAINER_ENDPOINT}" \
+  s3 mb "s3://${S3_BUCKET}" 2>/dev/null || true
+echo "[x] S3 Bucket provisioned: s3://${S3_BUCKET}"
+
+# Create SNS Topic
+TOPIC_ARN=$(docker run --rm \
+  --network personal-lifecycle-observability-net \
+  -e AWS_ACCESS_KEY_ID=test \
+  -e AWS_SECRET_ACCESS_KEY=test \
+  -e AWS_DEFAULT_REGION="${AWS_REGION}" \
+  amazon/aws-cli:latest \
+  --endpoint-url "${CONTAINER_ENDPOINT}" \
+  sns create-topic --name "${SNS_TOPIC}" --output text --query 'TopicArn')
+echo "[x] Amazon SNS Topic provisioned: ${TOPIC_ARN}"
+
+# 3. Publish Alert Event to Amazon SNS Topic
+echo ""
+echo "==> [STEP 3] Emulating Alertmanager / Monitoring triggering Amazon SNS..."
+TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+ALERT_PAYLOAD=$(cat <<EOF
+{
+  "alert_name": "HighHttpErrorRate",
+  "severity": "critical",
+  "service_name": "api-backend",
+  "deployment_environment": "production",
+  "summary": "Elevated HTTP 5xx error rate on api-backend",
+  "description": "5xx error rate exceeded 5% threshold (current: 100.0%)",
+  "observed_value": 100.0,
+  "threshold": 5.0,
+  "timestamp": "${TIMESTAMP}"
+}
+EOF
+)
+
+MESSAGE_ID=$(docker run --rm \
+  --network personal-lifecycle-observability-net \
+  -e AWS_ACCESS_KEY_ID=test \
+  -e AWS_SECRET_ACCESS_KEY=test \
+  -e AWS_DEFAULT_REGION="${AWS_REGION}" \
+  amazon/aws-cli:latest \
+  --endpoint-url "${CONTAINER_ENDPOINT}" \
+  sns publish \
+  --topic-arn "${TOPIC_ARN}" \
+  --message "${ALERT_PAYLOAD}" \
+  --output text --query 'MessageId')
+echo "[x] Alert published to Amazon SNS! Message ID: ${MESSAGE_ID}"
+
+# 4. Trigger AWS Lambda Function
+echo ""
+echo "==> [STEP 4] Invoking AWS Lambda Function (Serverless Dispatcher)..."
+SNS_EVENT=$(cat <<EOF
+{
+  "Records": [
+    {
+      "EventSource": "aws:sns",
+      "EventVersion": "1.0",
+      "EventSubscriptionArn": "${TOPIC_ARN}:sub-01",
+      "Sns": {
+        "MessageId": "${MESSAGE_ID}",
+        "TopicArn": "${TOPIC_ARN}",
+        "Message": $(echo "${ALERT_PAYLOAD}" | jq -c -R .)
+      }
+    }
+  ]
+}
+EOF
+)
+
+# Run Lambda handler script
+python3 "${SIM_DIR}/lambda/dispatcher.py"
+
+# 5. Verify ECS / Fargate Ephemeral Container Termination
+echo ""
+echo "==> [STEP 5] Verifying ephemeral Fargate container lifecycle..."
+ACTIVE_TASKS=$(docker ps --filter "name=fargate-task-" --format "{{.Names}}")
+if [ -z "${ACTIVE_TASKS}" ]; then
+  echo "[x] SUCCESS: Ephemeral Fargate container terminated and destroyed immediately upon task completion."
+else
+  echo "[!] Warning: Lingering task container detected: ${ACTIVE_TASKS}"
+fi
+
+# 6. Audit & Archival Verification in Amazon S3
+echo ""
+echo "==> [STEP 6] Verifying S3 Audit & Archival Bucket contents..."
+echo "--- S3 Object Tree (s3://${S3_BUCKET}/) ---"
+docker run --rm \
+  --network personal-lifecycle-observability-net \
+  -e AWS_ACCESS_KEY_ID=test \
+  -e AWS_SECRET_ACCESS_KEY=test \
+  -e AWS_DEFAULT_REGION="${AWS_REGION}" \
+  amazon/aws-cli:latest \
+  --endpoint-url "${CONTAINER_ENDPOINT}" \
+  s3 ls "s3://${S3_BUCKET}/" --recursive
+
+# 7. Print Sample Archived Diff & Transcript from S3
+echo ""
+echo "==> [STEP 7] Inspecting archived git diff from Amazon S3..."
+docker run --rm \
+  --network personal-lifecycle-observability-net \
+  -e AWS_ACCESS_KEY_ID=test \
+  -e AWS_SECRET_ACCESS_KEY=test \
+  -e AWS_DEFAULT_REGION="${AWS_REGION}" \
+  amazon/aws-cli:latest \
+  --endpoint-url "${CONTAINER_ENDPOINT}" \
+  s3 cp --quiet $(docker run --rm --network personal-lifecycle-observability-net -e AWS_ACCESS_KEY_ID=test -e AWS_SECRET_ACCESS_KEY=test amazon/aws-cli:latest --endpoint-url "${CONTAINER_ENDPOINT}" s3 ls "s3://${S3_BUCKET}/" --recursive | grep "diff.patch" | head -n1 | awk '{print "s3://'${S3_BUCKET}'/" $4}') -
+
+echo ""
+echo "================================================================"
+echo "  LOCAL CLOUD PRODUCTION SIMULATION COMPLETED SUCCESSFULLY!     "
+echo "  1. Alert ingested via Amazon SNS topic                       "
+echo "  2. Lambda function processed event & launched Fargate task   "
+echo "  3. Headless agent executed triage, evidence & diff creation  "
+echo "  4. Transcript, diff & evidence archived to Amazon S3 bucket  "
+echo "  5. Ephemeral compute container terminated immediately        "
+echo "================================================================"

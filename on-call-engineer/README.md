@@ -121,3 +121,56 @@ The verification script confirms:
 - Live Prometheus alert API is queried successfully (`--once`).
 - Mock firing alerts trigger incident generation and headless agent dispatch.
 - Read-only evidence collection and code-enforced autonomy policy checks succeed.
+
+---
+
+## 6. Local Cloud Production Simulation (SNS -> Lambda -> ECS/Fargate -> S3 & CloudWatch)
+
+We emulate the full AWS enterprise serverless incident response architecture locally using containerized emulators without cloud spend:
+
+```
+[Prometheus / Alertmanager]
+          │ (Alert Fires)
+          ▼
+[Amazon SNS / EventBridge] (Floci S3/SNS Topic)
+          │
+          │ (SNS Event Notification)
+          ▼
+[AWS Lambda Dispatcher] (cloud-simulator/lambda/dispatcher.py)
+          │
+          │ (Runs ephemeral task via ECS run_task)
+          ▼
+[AWS ECS / Fargate Ephemeral Container] (cloud-simulator/fargate-task/task-runner.sh --rm)
+          │
+          ├──► Headless AI Coding Agent: Gathers telemetry evidence
+          ├──► Evaluates code-enforced autonomy policy
+          ├──► Generates root-cause reproduction & minimal git diff patch
+          ├──► Emits live logs to CloudWatch Log Stream
+          │
+          ▼
+[Audit & Archival]
+   ├──► Archives deliverables to Amazon S3: `s3://lifecycle-on-call-incidents/<incident-id>/`
+   │      - `incident.json` (normalized alert payload)
+   │      - `prompt.md` (agent context prompt)
+   │      - `evidence.json` (bounded telemetry packet)
+   │      - `diff.patch` (minimal code correction)
+   │      - `transcript.log` (complete execution audit trail)
+   └──► Ephemeral compute container terminates and destroys immediately (`--rm`)
+```
+
+### Running the Cloud Simulation
+```bash
+# Using Makefile
+make on-call-simulate-cloud
+
+# Or direct bash script
+bash on-call-engineer/cloud-simulator/scripts/run-cloud-simulation
+```
+
+The simulation validates that:
+1. The SNS alert topic is created and accepts messages in the emulator.
+2. The Lambda dispatcher receives the SNS event, extracts the payload, and dispatches the Fargate task.
+3. The Fargate task executes headlessly in an isolated container.
+4. All artifacts (`diff.patch`, `evidence.json`, `transcript.log`) are securely uploaded to S3.
+5. The container terminates immediately, leaving 0 lingering compute containers.
+

@@ -259,7 +259,8 @@ VITE_BACKEND_URL=http://backend:8000
 │   ├── prompt.md              # Prompt template for headless coding agent
 │   ├── runbook.md             # Triage runbook for Prometheus alerts
 │   ├── README.md              # On-call operating guide & commands
-│   └── scripts/               # Poller, agent invoker & verification scripts
+│   ├── scripts/               # Poller, agent invoker & verification scripts
+│   └── cloud-simulator/       # Local AWS Serverless On-Call Simulator (SNS, Lambda, Fargate, S3)
 ├── openapi.yaml               # Root API contract
 ├── contracts/
 │   └── openapi.yaml           # Frozen canonical contract
