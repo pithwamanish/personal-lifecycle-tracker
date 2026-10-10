@@ -1,8 +1,9 @@
 render_api_key  = "rnd_xxxxxxxxxxxxxxxxxxxxxxxx"
 render_owner_id = "tea-xxxxxxxxxxxxxxxxxxxxxxxx"
-environment     = "production"
+environment     = "dev"
 region          = "oregon"
-plan            = "starter"
-db_plan         = "starter"
+plan            = "free"
+db_plan         = "free"
 repo_url        = "https://github.com/pithwamanish/personal-lifecycle-tracker.git"
 repo_branch     = "main"
+

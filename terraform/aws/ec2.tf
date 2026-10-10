@@ -36,6 +36,7 @@ resource "aws_instance" "app" {
     REPO_URL          = var.repo_url
     REPO_BRANCH       = var.repo_branch
     POSTGRES_PASSWORD = local.db_password
+    ENVIRONMENT       = var.environment
   })
 
   root_block_device {

@@ -1,8 +1,10 @@
-# GitHub Actions OpenID Connect (OIDC) Identity Provider & IAM Role
-# Allows GitHub Actions workflows to assume an AWS IAM role without permanent access keys.
+locals {
+  create_oidc_provider = var.enable_github_oidc && var.existing_oidc_provider_arn == null
+  oidc_provider_arn    = var.existing_oidc_provider_arn != null ? var.existing_oidc_provider_arn : (length(aws_iam_openid_connect_provider.github_actions) > 0 ? aws_iam_openid_connect_provider.github_actions[0].arn : "")
+}
 
 resource "aws_iam_openid_connect_provider" "github_actions" {
-  count = var.enable_github_oidc ? 1 : 0
+  count = local.create_oidc_provider ? 1 : 0
 
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
@@ -12,7 +14,8 @@ resource "aws_iam_openid_connect_provider" "github_actions" {
   ]
 
   tags = {
-    Name = "${var.project_name}-github-oidc-provider"
+    Name        = "${var.project_name}-github-oidc-provider"
+    Environment = var.environment
   }
 }
 
@@ -29,7 +32,7 @@ resource "aws_iam_role" "github_actions_render_deployer" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = aws_iam_openid_connect_provider.github_actions[0].arn
+          Federated = local.oidc_provider_arn
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {

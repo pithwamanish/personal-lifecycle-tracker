@@ -10,9 +10,9 @@ variable "render_owner_id" {
 }
 
 variable "environment" {
-  description = "Deployment environment name"
+  description = "Deployment environment name (e.g., dev, production)"
   type        = string
-  default     = "production"
+  default     = "dev"
 }
 
 variable "region" {
@@ -24,13 +24,13 @@ variable "region" {
 variable "plan" {
   description = "Render service plan (free, starter, standard)"
   type        = string
-  default     = "starter"
+  default     = "free"
 }
 
 variable "db_plan" {
   description = "Render postgres plan (free, starter, standard)"
   type        = string
-  default     = "starter"
+  default     = "free"
 }
 
 variable "repo_url" {

@@ -2,9 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev, develop]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
     inputs:
       deploy_to_render:
@@ -12,6 +12,14 @@ on:
         required: false
         type: boolean
         default: true
+      target_environment:
+        description: 'Target Deployment Environment'
+        required: false
+        type: choice
+        options:
+          - production
+          - dev
+        default: production
       render_health_url:
         description: 'Custom Health Endpoint URL to validate'
         required: false
@@ -114,7 +122,7 @@ jobs:
     name: Deploy to Render & Validate Health
     needs: [integration-and-e2e]
     if: |
-      (github.ref == 'refs/heads/main' && github.event_name != 'pull_request') ||
+      ((github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/develop') && github.event_name != 'pull_request') ||
       (github.event_name == 'workflow_dispatch' && (inputs.deploy_to_render == true || inputs.deploy_to_render == 'true'))
     runs-on: ubuntu-latest
     permissions:
@@ -124,6 +132,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Resolve Target Environment
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.target_environment }}" ]; then
+            TARGET="${{ inputs.target_environment }}"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            TARGET="production"
+          else
+            TARGET="dev"
+          fi
+          echo "TARGET_ENV=$TARGET" >> $GITHUB_ENV
+          echo "=== Deploying to environment: $TARGET ==="
 
       # Step 3a: Assume IAM Role using GitHub OIDC (Keyless Cloud Authentication)
       - name: Authenticate via GitHub OIDC Role
@@ -142,15 +162,23 @@ jobs:
       - name: Retrieve Render Credentials via OIDC Session
         if: env.RENDER_OIDC_ROLE_ARN != '' || env.AWS_ROLE_TO_ASSUME != ''
         run: |
-          echo "Checking for Render credentials in AWS Secrets Manager..."
-          if aws secretsmanager describe-secret --secret-id personal-lifecycle/render >/dev/null 2>&1; then
-            SECRET_VAL=$(aws secretsmanager get-secret-value --secret-id personal-lifecycle/render --query SecretString --output text)
+          echo "Checking for Render credentials in AWS Secrets Manager for environment: $TARGET_ENV..."
+          SECRET_NAME="personal-lifecycle/render-${TARGET_ENV}"
+          if ! aws secretsmanager describe-secret --secret-id "$SECRET_NAME" >/dev/null 2>&1; then
+            SECRET_NAME="personal-lifecycle/render"
+          fi
+
+          if aws secretsmanager describe-secret --secret-id "$SECRET_NAME" >/dev/null 2>&1; then
+            SECRET_VAL=$(aws secretsmanager get-secret-value --secret-id "$SECRET_NAME" --query SecretString --output text)
             HOOK_URL=$(echo "$SECRET_VAL" | grep -o '"deploy_hook_url": *"[^"]*"' | cut -d'"' -f4 || true)
             API_KEY=$(echo "$SECRET_VAL" | grep -o '"api_key": *"[^"]*"' | cut -d'"' -f4 || true)
             SRV_ID=$(echo "$SECRET_VAL" | grep -o '"service_id": *"[^"]*"' | cut -d'"' -f4 || true)
             if [ -n "$HOOK_URL" ]; then echo "RENDER_DEPLOY_HOOK_URL=$HOOK_URL" >> $GITHUB_ENV; fi
             if [ -n "$API_KEY" ]; then echo "RENDER_API_KEY=$API_KEY" >> $GITHUB_ENV; fi
             if [ -n "$SRV_ID" ]; then echo "RENDER_SERVICE_ID=$SRV_ID" >> $GITHUB_ENV; fi
+          elif aws ssm get-parameter --name "/personal-lifecycle/${TARGET_ENV}/deploy_hook_url" >/dev/null 2>&1; then
+            HOOK_URL=$(aws ssm get-parameter --name "/personal-lifecycle/${TARGET_ENV}/deploy_hook_url" --with-decryption --query Parameter.Value --output text)
+            echo "RENDER_DEPLOY_HOOK_URL=$HOOK_URL" >> $GITHUB_ENV
           elif aws ssm get-parameter --name "/personal-lifecycle/render/deploy_hook_url" >/dev/null 2>&1; then
             HOOK_URL=$(aws ssm get-parameter --name "/personal-lifecycle/render/deploy_hook_url" --with-decryption --query Parameter.Value --output text)
             echo "RENDER_DEPLOY_HOOK_URL=$HOOK_URL" >> $GITHUB_ENV
@@ -204,12 +232,21 @@ jobs:
       # Step 4: Validate that the deploy is successful by checking the health endpoint
       - name: Validate Deployment Health Endpoint
         env:
-          HEALTH_URL: ${{ inputs.render_health_url || secrets.RENDER_HEALTH_URL || 'https://personal-lifecycle-frontend.onrender.com/health' }}
           MAX_ATTEMPTS: 30
           POLL_INTERVAL: 10
         run: |
+          if [ -n "${{ inputs.render_health_url }}" ]; then
+            HEALTH_URL="${{ inputs.render_health_url }}"
+          elif [ -n "${{ secrets.RENDER_HEALTH_URL }}" ]; then
+            HEALTH_URL="${{ secrets.RENDER_HEALTH_URL }}"
+          elif [ "$TARGET_ENV" = "production" ]; then
+            HEALTH_URL="https://personal-lifecycle-frontend-prod.onrender.com/health"
+          else
+            HEALTH_URL="https://personal-lifecycle-frontend-dev.onrender.com/health"
+          fi
+
           echo "================================================================"
-          echo "Validating Render deployment health..."
+          echo "Validating Render deployment health for: $TARGET_ENV"
           echo "Target Health URL: $HEALTH_URL"
           echo "Max Attempts: $MAX_ATTEMPTS (Checking every ${POLL_INTERVAL}s)"
           echo "================================================================"

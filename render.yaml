@@ -1,9 +1,9 @@
 services:
   # ---------------------------------------------------------------------------
-  # Backend API Service (FastAPI)
+  # Backend API Service (FastAPI) - DEV Environment
   # ---------------------------------------------------------------------------
   - type: web
-    name: personal-lifecycle-backend
+    name: personal-lifecycle-backend-dev
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
@@ -13,20 +13,22 @@ services:
     envVars:
       - key: PORT
         value: 8000
+      - key: APP_ENV
+        value: development
       - key: PYTHONUNBUFFERED
         value: "1"
       - key: CORS_ORIGINS
         value: "*"
       - key: DATABASE_URL
         fromDatabase:
-          name: personal-lifecycle-db
+          name: personal-lifecycle-db-dev
           property: connectionString
 
   # ---------------------------------------------------------------------------
-  # Frontend Service (React 19 + Caddy 2 Reverse Proxy)
+  # Frontend Service (React 19 + Caddy 2 Reverse Proxy) - DEV Environment
   # ---------------------------------------------------------------------------
   - type: web
-    name: personal-lifecycle-frontend
+    name: personal-lifecycle-frontend-dev
     runtime: docker
     dockerfilePath: ./frontend/Dockerfile
     dockerContext: ./frontend
@@ -40,15 +42,15 @@ services:
       - key: BACKEND_URL
         fromService:
           type: web
-          name: personal-lifecycle-backend
+          name: personal-lifecycle-backend-dev
           property: host
 
 databases:
   # ---------------------------------------------------------------------------
-  # Managed PostgreSQL Database
+  # Managed PostgreSQL Database - DEV Environment
   # ---------------------------------------------------------------------------
-  - name: personal-lifecycle-db
-    databaseName: lifecycle
+  - name: personal-lifecycle-db-dev
+    databaseName: lifecycle_dev
     user: postgres
     plan: free
     region: oregon

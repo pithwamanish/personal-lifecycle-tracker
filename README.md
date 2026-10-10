@@ -89,24 +89,29 @@ make prod-down
 
 ---
 
-## Production Cloud Deployment (AWS & Render)
+## Cloud Infrastructure & Environments (Dev & Production)
 
-We provide comprehensive Infrastructure as Code (IaC) packages supporting both **AWS** and **Render**:
+We maintain two independent copies of our infrastructure:
+- **Development (`dev`)**: Uses the baseline infrastructure configured for development workloads, isolated non-overlapping VPC networks (`10.1.0.0/16`), and free tier plans.
+- **Production (`production`)**: A second, independent copy of the infrastructure provisioned for high availability and production workloads (`10.0.0.0/16` VPC).
 
-| Target Cloud | Tooling | Architecture | Guide |
+| Cloud Platform | Dev Environment | Production Copy | Architecture |
 |---|---|---|---|
-| **Render** | Render Blueprint (`render.yaml`) | Managed PostgreSQL + Docker Web Services (FastAPI + Caddy) | [Render Guide](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/render.md) |
-| **Render** | Terraform (`terraform/render/`) | Declarative IaC via Render Terraform Provider | [Render Guide](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/render.md) |
-| **AWS** | Terraform (`terraform/aws/`) | EC2 (`t3.micro`/Free Tier) + Elastic IP + SSM Session Manager + Docker Compose | [AWS Terraform Guide](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/aws-terraform.md) |
-| **AWS** | CloudFormation (`cloudformation/`) | 1-Click AWS Stack (VPC, Subnet, Security Group, EC2, Elastic IP, SSM) | [AWS CloudFormation Guide](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/aws-cloudformation.md) |
+| **Render** | [`render.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.yaml) | [`render.prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.prod.yaml) | Managed PostgreSQL + FastAPI + React/Caddy |
+| **Render (Terraform)** | [`terraform/render/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/render/) | [`terraform/render-prod/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/render-prod/) | Declarative IaC via Render Terraform Provider |
+| **AWS (Terraform)** | [`terraform/aws/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/aws/) (`10.1.0.0/16`) | [`terraform/aws-prod/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/aws-prod/) (`10.0.0.0/16`) | EC2 (`t3.micro`/Free Tier) + Elastic IP + SSM |
+| **AWS (CloudFormation)**| [`cloudformation/aws-ec2-compose.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose.yaml) | [`cloudformation/aws-ec2-compose-prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose-prod.yaml) | 1-Click AWS Stack (VPC, Subnet, SG, EC2, EIP, SSM) |
 
 ### Zero-Host-Runtime IaC Commands (Dockerized)
 ```bash
-# Validate AWS Terraform
-make tf-validate-aws
+# Validate ALL Terraform environments simultaneously (AWS Dev, AWS Prod, Render Dev, Render Prod)
+make tf-validate
 
-# Validate Render Terraform
-make tf-validate-render
+# Validate individual environments
+make tf-validate-aws        # AWS Dev
+make tf-validate-aws-prod   # AWS Production copy
+make tf-validate-render     # Render Dev
+make tf-validate-render-prod# Render Production copy
 
 # Format all Terraform files
 make tf-fmt

@@ -1,0 +1,57 @@
+services:
+  # ---------------------------------------------------------------------------
+  # Backend API Service (FastAPI) - PRODUCTION Environment
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: personal-lifecycle-backend-prod
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    region: oregon
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: APP_ENV
+        value: production
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: personal-lifecycle-db-prod
+          property: connectionString
+
+  # ---------------------------------------------------------------------------
+  # Frontend Service (React 19 + Caddy 2 Reverse Proxy) - PRODUCTION Environment
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: personal-lifecycle-frontend-prod
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    dockerfileTarget: prod
+    region: oregon
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 80
+      - key: BACKEND_URL
+        fromService:
+          type: web
+          name: personal-lifecycle-backend-prod
+          property: host
+
+databases:
+  # ---------------------------------------------------------------------------
+  # Managed PostgreSQL Database - PRODUCTION Environment
+  # ---------------------------------------------------------------------------
+  - name: personal-lifecycle-db-prod
+    databaseName: lifecycle
+    user: postgres
+    plan: starter
+    region: oregon
+    postgresMajorVersion: "16"

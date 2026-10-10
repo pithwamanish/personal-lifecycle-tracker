@@ -1,9 +1,8 @@
 # Deploying Personal Lifecycle Tracker to Render
 
-[Render](https://render.com) is a modern cloud Application Platform-as-a-Service (PaaS). This guide details three automated ways to deploy the Personal Lifecycle Tracker:
-1. **Option A (Recommended)**: Render Blueprint (`render.yaml`) — 1-click declarative Git deployment.
-2. **Option B**: Terraform (`terraform/render/`) — Infrastructure as Code management using the Render Terraform Provider.
-3. **Option C**: GitHub Actions CI/CD Pipeline (`.github/workflows/ci.yml`) — Automated test-gated deployment with GitHub OIDC role authentication and health endpoint verification.
+[Render](https://render.com) is a modern cloud Application Platform-as-a-Service (PaaS). The Personal Lifecycle Tracker infrastructure supports two independent environments:
+1. **Development (`dev`)**: Free tier services (`personal-lifecycle-*-dev`) managed via `render.yaml` or `terraform/render/`.
+2. **Production (`production`)**: Independent copy with production tier services (`personal-lifecycle-*-prod`) managed via `render.prod.yaml` or `terraform/render-prod/`.
 
 ---
 
@@ -23,118 +22,78 @@ flowchart LR
 
 ---
 
-## Option A: 1-Click Render Blueprint (`render.yaml`)
+## Option A: 1-Click Render Blueprint
 
-### Prerequisites
-1. A [Render account](https://dashboard.render.com).
-2. The Git repository pushed to GitHub or GitLab.
+### 1. Development Environment (`render.yaml`)
+To deploy the **dev** environment:
+1. Connect your repository to Render Blueprints.
+2. Render uses [`render.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.yaml) by default.
+3. Provisions:
+   - `personal-lifecycle-db-dev` (Database: `lifecycle_dev`, Plan: `free`)
+   - `personal-lifecycle-backend-dev` (FastAPI Web Service, Plan: `free`)
+   - `personal-lifecycle-frontend-dev` (Caddy Web Service, Plan: `free`)
+4. Click **Apply**.
 
-### Step-by-Step Instructions
-
-1. **Push your code to GitHub / GitLab**:
-   Ensure [`render.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.yaml) is present in the repository root.
-
-2. **Create New Blueprint Instance in Render**:
-   - Go to the [Render Dashboard](https://dashboard.render.com).
-   - Click the **"New +"** button in the top navigation bar.
-   - Select **"Blueprint"**.
-   - Connect your GitHub repository (`personal-lifecycle-tracker`).
-   - Render will automatically parse `render.yaml` and show the 3 resources to be provisioned:
-     - `personal-lifecycle-db` (PostgreSQL Database)
-     - `personal-lifecycle-backend` (Docker Web Service)
-     - `personal-lifecycle-frontend` (Docker Web Service)
-
-3. **Apply & Deploy**:
-   - Click **"Apply"**.
-   - Render will provision the database, build the backend Docker container, build the frontend Caddy container, and start the services.
-   - Once deployment completes (usually 2–3 minutes), click on the `personal-lifecycle-frontend` service to view its live `.onrender.com` URL.
-
-4. **Verify Deployment**:
-   - Test Healthcheck: `https://<frontend-subdomain>.onrender.com/health`
-   - Test Web App: Open `https://<frontend-subdomain>.onrender.com/` in your browser.
-   - Test API Docs: `https://<backend-subdomain>.onrender.com/docs`
+### 2. Production Environment Copy (`render.prod.yaml`)
+To deploy the independent **production** environment:
+1. In the Render Dashboard, create a new Blueprint instance.
+2. Point the Blueprint configuration to [`render.prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.prod.yaml) (or [`render-prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render-prod.yaml)).
+3. Provisions:
+   - `personal-lifecycle-db-prod` (Database: `lifecycle`, Plan: `starter`)
+   - `personal-lifecycle-backend-prod` (FastAPI Web Service, Plan: `starter`)
+   - `personal-lifecycle-frontend-prod` (Caddy Web Service, Plan: `starter`)
+4. Click **Apply**.
 
 ---
 
-## Option B: Deploying via Terraform (`terraform/render/`)
+## Option B: Deploying via Terraform
 
-If your team manages infrastructure via Terraform, you can use the official Render Terraform provider.
+### 1. Development Environment (`terraform/render/`)
+```bash
+# Validate Dev configuration
+make tf-validate-render
 
-### Prerequisites
-1. Generate a Render API Key:
-   - Log into [Render Dashboard](https://dashboard.render.com).
-   - Go to **Account Settings** -> **API Keys** -> **Create API Key**.
-2. Retrieve your Render Owner/Workspace ID:
-   - Visible in your URL or workspace settings (starts with `usr-` or `tea-`).
+# Plan Dev infrastructure
+make tf-plan-render
 
-### Step-by-Step Instructions
+# Apply Dev infrastructure
+docker run --rm -it \
+  -v $(PWD)/terraform/render:/workspace \
+  -w /workspace \
+  -e RENDER_API_KEY="rnd_your_api_key" \
+  hashicorp/terraform:1.7.5 apply -var-file=terraform.tfvars.dev
+```
 
-1. **Configure Variables**:
-   Copy the example variables file:
-   ```bash
-   cp terraform/render/terraform.tfvars.example terraform/render/terraform.tfvars
-   ```
-   Edit `terraform/render/terraform.tfvars` with your credentials:
-   ```hcl
-   render_api_key  = "rnd_your_actual_api_key"
-   render_owner_id = "tea_your_actual_owner_id"
-   environment     = "production"
-   region          = "oregon"
-   repo_url        = "https://github.com/your-org/personal-lifecycle-tracker.git"
-   repo_branch     = "main"
-   ```
+### 2. Production Environment Copy (`terraform/render-prod/`)
+```bash
+# Validate Production configuration
+make tf-validate-render-prod
 
-2. **Initialize and Validate (Zero Host Runtime)**:
-   ```bash
-   make tf-init-render
-   make tf-validate-render
-   ```
+# Plan Production infrastructure
+make tf-plan-render-prod
 
-3. **Plan Infrastructure**:
-   ```bash
-   make tf-plan-render
-   ```
+# Apply Production infrastructure
+docker run --rm -it \
+  -v $(PWD)/terraform/render-prod:/workspace \
+  -w /workspace \
+  -e RENDER_API_KEY="rnd_your_api_key" \
+  hashicorp/terraform:1.7.5 apply -var-file=terraform.tfvars.prod
+```
 
-4. **Apply Deployment**:
-   ```bash
-   docker run --rm -it \
-     -v $(PWD)/terraform/render:/workspace \
-     -w /workspace \
-     -e RENDER_API_KEY="rnd_your_actual_api_key" \
-     hashicorp/terraform:1.7.5 apply
-   ```
-
-5. **Outputs**:
-   Terraform will display:
-   - `backend_url`
-   - `frontend_url`
-   - `application_health_url`
+### Environment Outputs
+Both modules export identical output attributes:
+- `backend_url`: URL for the backend API service.
+- `frontend_url`: URL for the frontend application.
+- `application_health_url`: Public healthcheck endpoint via Caddy reverse proxy (`/health`).
+- `database_id`: Render managed PostgreSQL identifier.
 
 ---
 
-## Option C: GitHub Actions CI/CD with GitHub OIDC Role (`.github/workflows/ci.yml`)
+## Option C: GitHub Actions CI/CD (`.github/workflows/ci.yml`)
 
-For complete continuous delivery with zero hardcoded long-lived secrets, use the GitHub Actions CI/CD pipeline:
+The GitHub Actions workflow deploys automatically based on branch or workflow dispatch:
+- **Pushes to `dev` / `develop`**: Deploys to the Dev environment and polls `https://personal-lifecycle-frontend-dev.onrender.com/health`.
+- **Pushes to `main`**: Deploys to the Production copy and polls `https://personal-lifecycle-frontend-prod.onrender.com/health`.
+- **Manual Trigger**: Select `target_environment: production` or `target_environment: dev`.
 
-1. **Parallel Automated Tests**: Runs backend Pytest and frontend Vitest unit test suites simultaneously.
-2. **Containerized E2E Verification**: Builds the multi-container Docker Compose stack, validates PostgreSQL integration tests, and runs the 17-scenario Playwright E2E suite.
-3. **Keyless Cloud Authentication**:
-   - Uses GitHub OIDC (`permissions: id-token: write`) to assume an AWS IAM role (`terraform/aws/oidc.tf`).
-   - Retrieves Render Deploy Hook or API credentials dynamically from AWS Secrets Manager (`personal-lifecycle/render`).
-4. **Trigger Deployment**: Automatically calls Render's deploy hook or REST API to trigger a rollout.
-5. **Healthcheck Verification**: Polling loop verifies `https://<frontend-subdomain>.onrender.com/health` returns HTTP 200 with `"status": "healthy"` before completing the pipeline.
-
-For detailed secrets and setup instructions, see the [CI/CD Pipeline Guide](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/ci-cd.md).
-
----
-
-## Environment Variables & Configuration
-
-| Service | Variable | Purpose | Value Source |
-|---|---|---|---|
-| **Backend** | `PORT` | Listening HTTP port | `8000` |
-| **Backend** | `DATABASE_URL` | PostgreSQL connection string | Injected from `personal-lifecycle-db` |
-| **Backend** | `PYTHONUNBUFFERED` | Immediate stdout streaming | `1` |
-| **Backend** | `CORS_ORIGINS` | Permitted browser origins | `*` |
-| **Frontend** | `PORT` | Caddy listening port | `80` |
-| **Frontend** | `BACKEND_URL` | Internal/External backend hostname | Injected from `personal-lifecycle-backend` host |
+See the [CI/CD Pipeline Guide](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/ci-cd.md) for secrets configuration.

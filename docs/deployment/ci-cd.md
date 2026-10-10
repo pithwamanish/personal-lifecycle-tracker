@@ -9,9 +9,10 @@ This guide details the continuous integration and continuous deployment (CI/CD) 
 ```mermaid
 flowchart TD
     subgraph Trigger["Pipeline Triggers"]
-        PR["Pull Request to main"]
-        Push["Push to main"]
-        Dispatch["Workflow Dispatch (Manual)"]
+        PR["Pull Request to main or dev"]
+        PushDev["Push to dev / develop -> Deploy Dev"]
+        PushMain["Push to main -> Deploy Production Copy"]
+        Dispatch["Workflow Dispatch (Select Env: dev / production)"]
     end
 
     subgraph ParallelTests["Phase 1: Parallel Unit & Contract Tests"]
@@ -32,16 +33,15 @@ flowchart TD
         BuildStack --> StartStack --> WaitHealth --> IntegTests --> E2ETests --> TearDown
     end
 
-    subgraph DeployGate["Phase 3: Automated Render Deployment"]
+    subgraph DeployGate["Phase 3: Multi-Environment Render Deployment"]
         direction TB
-        CheckBranch{"Branch == main or Manual?"}
+        ResolveEnv["Resolve TARGET_ENV\n(main -> production, dev -> dev)"]
         OIDCAuth["GitHub OIDC Token Exchange\n(id-token: write)\nAssume AWS IAM Role"]
         FetchSecrets["Fetch Render Credentials\n(AWS Secrets Manager / SSM)"]
-        TriggerRender["Trigger Render Deployment\n(Deploy Hook / REST API)"]
-        ValidateHealth["Poll & Validate Live Health Endpoint\n(status: healthy, 200 OK)"]
+        TriggerRender["Trigger Render Deployment\n(Dev or Production Service)"]
+        ValidateHealth["Poll & Validate Environment Health Endpoint\n(Dev or Prod Frontend :80/health)"]
 
-        CheckBranch -->|Yes| OIDCAuth --> FetchSecrets --> TriggerRender --> ValidateHealth
-        CheckBranch -->|No (PR)| Skip["Skip Deployment (Tests Pass)"]
+        ResolveEnv --> OIDCAuth --> FetchSecrets --> TriggerRender --> ValidateHealth
     end
 
     Trigger --> ParallelTests

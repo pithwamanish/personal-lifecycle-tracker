@@ -198,9 +198,13 @@ VITE_BACKEND_URL=http://backend:8000
 │       ├── aws-terraform.md   # AWS EC2 Docker Compose Terraform guide
 │       └── aws-cloudformation.md # AWS CloudFormation 1-click guide
 ├── cloudformation/
-│   └── aws-ec2-compose.yaml   # AWS CloudFormation production template
+│   ├── aws-ec2-compose.yaml   # AWS CloudFormation (Dev Environment: 10.1.0.0/16)
+│   └── aws-ec2-compose-prod.yaml # AWS CloudFormation (Production Copy: 10.0.0.0/16)
+├── render.yaml                # Render Blueprint (Dev Environment)
+├── render.prod.yaml           # Render Blueprint (Production Environment Copy)
+├── render-prod.yaml           # Alias for production blueprint
 ├── terraform/
-│   ├── aws/                   # AWS EC2 Docker Compose Terraform module
+│   ├── aws/                   # AWS Terraform (Dev Environment: 10.1.0.0/16)
 │   │   ├── versions.tf
 │   │   ├── variables.tf
 │   │   ├── vpc.tf
@@ -209,12 +213,33 @@ VITE_BACKEND_URL=http://backend:8000
 │   │   ├── user_data.sh       # Cloud-init bootstrapper
 │   │   ├── ec2.tf
 │   │   ├── eip.tf
-│   │   └── outputs.tf
-│   └── render/                # Render Terraform module (render-oss/render)
+│   │   ├── oidc.tf
+│   │   ├── outputs.tf
+│   │   └── terraform.tfvars.dev
+│   ├── aws-prod/              # AWS Terraform (Production Environment Copy: 10.0.0.0/16)
+│   │   ├── versions.tf
+│   │   ├── variables.tf
+│   │   ├── vpc.tf
+│   │   ├── security_groups.tf
+│   │   ├── iam.tf
+│   │   ├── user_data.sh
+│   │   ├── ec2.tf
+│   │   ├── eip.tf
+│   │   ├── oidc.tf
+│   │   ├── outputs.tf
+│   │   └── terraform.tfvars.prod
+│   ├── render/                # Render Terraform (Dev Environment: free plan)
+│   │   ├── versions.tf
+│   │   ├── variables.tf
+│   │   ├── main.tf
+│   │   ├── outputs.tf
+│   │   └── terraform.tfvars.dev
+│   └── render-prod/           # Render Terraform (Production Environment Copy: starter plan)
 │       ├── versions.tf
 │       ├── variables.tf
 │       ├── main.tf
-│       └── outputs.tf
+│       ├── outputs.tf
+│       └── terraform.tfvars.prod
 ├── backend/
 │   ├── Dockerfile             # Python 3.11 base image with healthchecks
 │   ├── requirements.txt       # Backend dependencies
@@ -241,17 +266,18 @@ VITE_BACKEND_URL=http://backend:8000
 
 ---
 
-## 7. Cloud Deployment Automation (AWS & Render)
+## 7. Cloud Deployment Automation (Dev & Production)
 
 Execute all validations and formatting inside Docker without host dependencies:
 
 - **Render**:
-  - Declarative Blueprint: [`render.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.yaml)
-  - Terraform Module: [`terraform/render/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/render/)
-  - Validation: `make tf-validate-render`
+  - Dev Blueprint: [`render.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.yaml) | Prod Blueprint Copy: [`render.prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.prod.yaml)
+  - Dev Terraform: [`terraform/render/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/render/) | Prod Terraform Copy: [`terraform/render-prod/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/render-prod/)
+  - Validation: `make tf-validate-render` and `make tf-validate-render-prod`
 - **AWS**:
-  - Terraform Module: [`terraform/aws/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/aws/)
-  - CloudFormation: [`cloudformation/aws-ec2-compose.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose.yaml)
-  - Validation: `make tf-validate-aws` and `make cf-validate`
+  - Dev Terraform: [`terraform/aws/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/aws/) | Prod Terraform Copy: [`terraform/aws-prod/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/aws-prod/)
+  - Dev CloudFormation: [`cloudformation/aws-ec2-compose.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose.yaml) | Prod CloudFormation Copy: [`cloudformation/aws-ec2-compose-prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose-prod.yaml)
+  - Validation: `make tf-validate` (validates all Terraform environments) and `make cf-validate` (validates both CloudFormation templates)
 
 regularly commit code to git
+

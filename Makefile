@@ -64,6 +64,7 @@ AWS_CLI_IMAGE ?= amazon/aws-cli:latest
 tf-fmt:
 	docker run --rm -v $(CURDIR):/workspace -w /workspace $(TF_IMAGE) fmt -recursive terraform/
 
+# AWS Terraform - Dev Environment
 tf-init-aws:
 	docker run --rm -v $(CURDIR)/terraform/aws:/workspace -w /workspace $(TF_IMAGE) init
 
@@ -71,11 +72,25 @@ tf-validate-aws:
 	docker run --rm -v $(CURDIR)/terraform/aws:/workspace -w /workspace $(TF_IMAGE) validate
 
 tf-plan-aws:
-	docker run --rm -v $(CURDIR)/terraform/aws:/workspace -w /workspace -v $$HOME/.aws:/root/.aws:ro -e AWS_PROFILE $(TF_IMAGE) plan
+	docker run --rm -v $(CURDIR)/terraform/aws:/workspace -w /workspace -v $$HOME/.aws:/root/.aws:ro -e AWS_PROFILE $(TF_IMAGE) plan -var-file=terraform.tfvars.dev
 
 tf-apply-aws:
-	docker run --rm -it -v $(CURDIR)/terraform/aws:/workspace -w /workspace -v $$HOME/.aws:/root/.aws:ro -e AWS_PROFILE $(TF_IMAGE) apply
+	docker run --rm -it -v $(CURDIR)/terraform/aws:/workspace -w /workspace -v $$HOME/.aws:/root/.aws:ro -e AWS_PROFILE $(TF_IMAGE) apply -var-file=terraform.tfvars.dev
 
+# AWS Terraform - Production Environment Copy
+tf-init-aws-prod:
+	docker run --rm -v $(CURDIR)/terraform/aws-prod:/workspace -w /workspace $(TF_IMAGE) init
+
+tf-validate-aws-prod:
+	docker run --rm -v $(CURDIR)/terraform/aws-prod:/workspace -w /workspace $(TF_IMAGE) validate
+
+tf-plan-aws-prod:
+	docker run --rm -v $(CURDIR)/terraform/aws-prod:/workspace -w /workspace -v $$HOME/.aws:/root/.aws:ro -e AWS_PROFILE $(TF_IMAGE) plan -var-file=terraform.tfvars.prod
+
+tf-apply-aws-prod:
+	docker run --rm -it -v $(CURDIR)/terraform/aws-prod:/workspace -w /workspace -v $$HOME/.aws:/root/.aws:ro -e AWS_PROFILE $(TF_IMAGE) apply -var-file=terraform.tfvars.prod
+
+# Render Terraform - Dev Environment
 tf-init-render:
 	docker run --rm -v $(CURDIR)/terraform/render:/workspace -w /workspace $(TF_IMAGE) init
 
@@ -83,11 +98,31 @@ tf-validate-render:
 	docker run --rm -v $(CURDIR)/terraform/render:/workspace -w /workspace $(TF_IMAGE) validate
 
 tf-plan-render:
-	docker run --rm -v $(CURDIR)/terraform/render:/workspace -w /workspace -e RENDER_API_KEY $(TF_IMAGE) plan
+	docker run --rm -v $(CURDIR)/terraform/render:/workspace -w /workspace -e RENDER_API_KEY $(TF_IMAGE) plan -var-file=terraform.tfvars.dev
 
-cf-validate:
-	docker run --rm -v $(CURDIR)/cloudformation:/cf $(AWS_CLI_IMAGE) cloudformation validate-template --template-body file:///cf/aws-ec2-compose.yaml
+# Render Terraform - Production Environment Copy
+tf-init-render-prod:
+	docker run --rm -v $(CURDIR)/terraform/render-prod:/workspace -w /workspace $(TF_IMAGE) init
+
+tf-validate-render-prod:
+	docker run --rm -v $(CURDIR)/terraform/render-prod:/workspace -w /workspace $(TF_IMAGE) validate
+
+tf-plan-render-prod:
+	docker run --rm -v $(CURDIR)/terraform/render-prod:/workspace -w /workspace -e RENDER_API_KEY $(TF_IMAGE) plan -var-file=terraform.tfvars.prod
+
+# Validate All Terraform Environments
+tf-validate: tf-validate-aws tf-validate-aws-prod tf-validate-render tf-validate-render-prod
+
+# CloudFormation Validation
+cf-validate-dev:
+	docker run --rm -v $(CURDIR)/cloudformation:/cf -v $$HOME/.aws:/root/.aws:ro -e AWS_DEFAULT_REGION=us-east-1 $(AWS_CLI_IMAGE) cloudformation validate-template --template-body file:///cf/aws-ec2-compose.yaml
+
+cf-validate-prod:
+	docker run --rm -v $(CURDIR)/cloudformation:/cf -v $$HOME/.aws:/root/.aws:ro -e AWS_DEFAULT_REGION=us-east-1 $(AWS_CLI_IMAGE) cloudformation validate-template --template-body file:///cf/aws-ec2-compose-prod.yaml
+
+cf-validate: cf-validate-dev cf-validate-prod
 
 ci-validate:
 	act -n -W .github/workflows/ci.yml
+
 

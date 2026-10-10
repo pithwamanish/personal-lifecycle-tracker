@@ -48,7 +48,7 @@ fi
 
 cd "$APP_DIR"
 
-# 4. Generate Production Environment Configuration
+# 4. Generate Environment Configuration
 cat <<EOF > "$APP_DIR/.env"
 # Host port mapping
 PROD_PORT=${APP_PORT}
@@ -57,7 +57,7 @@ FRONTEND_PORT=3003
 POSTGRES_PORT=5434
 
 # Application environment
-APP_ENV=production
+APP_ENV=${ENVIRONMENT}
 PYTHONUNBUFFERED=1
 
 # PostgreSQL credentials
@@ -78,7 +78,7 @@ chown -R ubuntu:ubuntu "$APP_DIR"
 # 5. Create Systemd Service for Auto-Start on System Boot
 cat <<EOF > /etc/systemd/system/personal-lifecycle-tracker.service
 [Unit]
-Description=Personal Lifecycle Tracker Multi-Container Production Stack
+Description=Personal Lifecycle Tracker Multi-Container Stack (${ENVIRONMENT})
 After=docker.service network-online.target
 Requires=docker.service
 

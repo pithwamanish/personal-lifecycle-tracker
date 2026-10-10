@@ -11,9 +11,21 @@ variable "project_name" {
 }
 
 variable "environment" {
-  description = "Deployment environment (e.g., production, staging)"
+  description = "Deployment environment (e.g., dev, staging, production)"
   type        = string
-  default     = "production"
+  default     = "dev"
+}
+
+variable "vpc_cidr" {
+  description = "VPC CIDR block (default 10.1.0.0/16 for dev, avoiding collision with prod 10.0.0.0/16)"
+  type        = string
+  default     = "10.1.0.0/16"
+}
+
+variable "subnet_cidr" {
+  description = "Public Subnet CIDR block (default 10.1.1.0/24 for dev)"
+  type        = string
+  default     = "10.1.1.0/24"
 }
 
 variable "instance_type" {
@@ -81,6 +93,12 @@ variable "enable_github_oidc" {
   description = "Whether to provision the GitHub Actions OIDC provider and IAM role for Render deployment"
   type        = bool
   default     = true
+}
+
+variable "existing_oidc_provider_arn" {
+  description = "Optional ARN of an existing GitHub Actions OIDC provider in the AWS account to prevent duplicate provider creation"
+  type        = string
+  default     = null
 }
 
 variable "github_repo" {

@@ -23,6 +23,7 @@ resource "render_web_service" "backend" {
 
   env_vars = {
     PORT             = { value = "8000" }
+    APP_ENV          = { value = var.environment }
     PYTHONUNBUFFERED = { value = "1" }
     CORS_ORIGINS     = { value = "*" }
     DATABASE_URL     = { value = render_postgres.db.connection_info.internal_connection_string }

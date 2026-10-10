@@ -1,10 +1,29 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  Personal Lifecycle Tracker - Production EC2 Deployment with Docker Compose & Caddy reverse proxy.
+  Personal Lifecycle Tracker - Development (Dev) EC2 Deployment with Docker Compose & Caddy reverse proxy.
   Deploys a custom VPC, Public Subnet, Security Group, IAM Role with SSM access, and an EC2 instance
   running the containerized PostgreSQL, FastAPI backend, and React/Caddy frontend.
 
 Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    Description: Deployment environment identifier (dev, staging, production).
+    AllowedValues:
+      - dev
+      - staging
+      - production
+
+  VpcCidr:
+    Type: String
+    Default: 10.1.0.0/16
+    Description: VPC IPv4 CIDR block (default 10.1.0.0/16 for dev to avoid collision with prod).
+
+  SubnetCidr:
+    Type: String
+    Default: 10.1.1.0/24
+    Description: Public Subnet IPv4 CIDR block (default 10.1.1.0/24 for dev).
+
   InstanceType:
     Type: String
     Default: t3.micro
@@ -64,12 +83,14 @@ Resources:
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 10.0.0.0/16
+      CidrBlock: !Ref VpcCidr
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-vpc'
+        - Key: Environment
+          Value: !Ref Environment
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -77,6 +98,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-igw'
+        - Key: Environment
+          Value: !Ref Environment
 
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -88,11 +111,13 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
+      CidrBlock: !Ref SubnetCidr
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-public-subnet'
+        - Key: Environment
+          Value: !Ref Environment
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -247,7 +272,7 @@ Resources:
           BACKEND_PORT=8003
           FRONTEND_PORT=3003
           POSTGRES_PORT=5434
-          APP_ENV=production
+          APP_ENV=${Environment}
           PYTHONUNBUFFERED=1
           POSTGRES_USER=postgres
           POSTGRES_PASSWORD=$DB_PASS
