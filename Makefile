@@ -62,29 +62,29 @@ TF_IMAGE ?= hashicorp/terraform:1.7.5
 AWS_CLI_IMAGE ?= amazon/aws-cli:latest
 
 tf-fmt:
-	docker run --rm -v $$(PWD):/workspace -w /workspace $(TF_IMAGE) fmt -recursive terraform/
+	docker run --rm -v $(CURDIR):/workspace -w /workspace $(TF_IMAGE) fmt -recursive terraform/
 
 tf-init-aws:
-	docker run --rm -v $$(PWD)/terraform/aws:/workspace -w /workspace $(TF_IMAGE) init
+	docker run --rm -v $(CURDIR)/terraform/aws:/workspace -w /workspace $(TF_IMAGE) init
 
 tf-validate-aws:
-	docker run --rm -v $$(PWD)/terraform/aws:/workspace -w /workspace $(TF_IMAGE) validate
+	docker run --rm -v $(CURDIR)/terraform/aws:/workspace -w /workspace $(TF_IMAGE) validate
 
 tf-plan-aws:
-	docker run --rm -v $$(PWD)/terraform/aws:/workspace -w /workspace -v $$HOME/.aws:/root/.aws:ro -e AWS_PROFILE $(TF_IMAGE) plan
+	docker run --rm -v $(CURDIR)/terraform/aws:/workspace -w /workspace -v $$HOME/.aws:/root/.aws:ro -e AWS_PROFILE $(TF_IMAGE) plan
 
 tf-apply-aws:
-	docker run --rm -it -v $$(PWD)/terraform/aws:/workspace -w /workspace -v $$HOME/.aws:/root/.aws:ro -e AWS_PROFILE $(TF_IMAGE) apply
+	docker run --rm -it -v $(CURDIR)/terraform/aws:/workspace -w /workspace -v $$HOME/.aws:/root/.aws:ro -e AWS_PROFILE $(TF_IMAGE) apply
 
 tf-init-render:
-	docker run --rm -v $$(PWD)/terraform/render:/workspace -w /workspace $(TF_IMAGE) init
+	docker run --rm -v $(CURDIR)/terraform/render:/workspace -w /workspace $(TF_IMAGE) init
 
 tf-validate-render:
-	docker run --rm -v $$(PWD)/terraform/render:/workspace -w /workspace $(TF_IMAGE) validate
+	docker run --rm -v $(CURDIR)/terraform/render:/workspace -w /workspace $(TF_IMAGE) validate
 
 tf-plan-render:
-	docker run --rm -v $$(PWD)/terraform/render:/workspace -w /workspace -e RENDER_API_KEY $(TF_IMAGE) plan
+	docker run --rm -v $(CURDIR)/terraform/render:/workspace -w /workspace -e RENDER_API_KEY $(TF_IMAGE) plan
 
 cf-validate:
-	docker run --rm -v $$(PWD)/cloudformation:/cf $(AWS_CLI_IMAGE) cloudformation validate-template --template-body file:///cf/aws-ec2-compose.yaml
+	docker run --rm -v $(CURDIR)/cloudformation:/cf $(AWS_CLI_IMAGE) cloudformation validate-template --template-body file:///cf/aws-ec2-compose.yaml
 
