@@ -6,7 +6,12 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.engine.url import make_url
 
-from app.database import create_engine_for_url, get_database_url
+from app.database import (
+    create_engine_for_url,
+    get_database_url,
+    is_postgres_url,
+    wait_for_db,
+)
 from app.models import CreateItemDTO, LifecycleType
 from app.store import DatabaseStore, get_store
 
@@ -36,10 +41,31 @@ def test_database_url_resolution(monkeypatch):
     assert parsed.database == "lifecycledb"
 
 
-def test_database_engine_dialect_handling():
+def test_is_postgres_url():
+    assert is_postgres_url("postgresql://user:pass@localhost:5432/db") is True
+    assert is_postgres_url("postgres://user:pass@localhost:5432/db") is True
+    assert is_postgres_url("postgresql+psycopg2://user:pass@localhost:5432/db") is True
+    assert is_postgres_url("sqlite:///./lifecycle.db") is False
+    assert is_postgres_url("sqlite:///:memory:") is False
+
+
+def test_database_engine_dialect_handling(monkeypatch):
     # SQLite engine creation
     sqlite_engine = create_engine_for_url("sqlite:///:memory:")
     assert sqlite_engine.dialect.name == "sqlite"
+
+    # PostgreSQL engine creation with connection pooling
+    monkeypatch.setenv("DB_POOL_SIZE", "15")
+    monkeypatch.setenv("DB_MAX_OVERFLOW", "25")
+    pg_engine = create_engine_for_url("postgresql://user:pass@localhost:5432/lifecycledb")
+    assert pg_engine.dialect.name == "postgresql"
+    assert pg_engine.dialect.driver in ("psycopg", "psycopg2")
+    assert pg_engine.pool.size() == 15
+
+    # Explicit psycopg2 driver URL
+    pg2_engine = create_engine_for_url("postgresql+psycopg2://user:pass@localhost:5432/lifecycledb")
+    assert pg2_engine.dialect.name == "postgresql"
+    assert pg2_engine.dialect.driver == "psycopg2"
 
 
 def test_sqlite_persistence_across_connections():

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from contextlib import contextmanager
 from typing import Generator, Optional
 
@@ -24,13 +25,22 @@ def get_database_url() -> str:
     return raw_url
 
 
+def is_postgres_url(url: str) -> bool:
+    """Check whether a URL targets a PostgreSQL database."""
+    return url.startswith("postgresql") or url.startswith("postgres")
+
+
 def create_engine_for_url(url: Optional[str] = None) -> Engine:
     """
     Factory function creating a database-agnostic SQLAlchemy Engine.
-    Handles dialect-specific connection arguments (such as SQLite foreign keys and thread safety).
+    Handles dialect-specific connection arguments (such as SQLite foreign keys and thread safety,
+    or PostgreSQL connection pooling and pre-ping checks).
     """
     db_url = url or get_database_url()
     connect_args = {}
+    engine_kwargs = {
+        "pool_pre_ping": True,
+    }
 
     if db_url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
@@ -43,11 +53,19 @@ def create_engine_for_url(url: Optional[str] = None) -> Engine:
             db_dir = os.path.dirname(cleaned_path)
             if db_dir and not os.path.exists(db_dir):
                 os.makedirs(db_dir, exist_ok=True)
+    elif is_postgres_url(db_url):
+        # Connection pooling optimizations for PostgreSQL
+        engine_kwargs.update({
+            "pool_size": int(os.getenv("DB_POOL_SIZE", "10")),
+            "max_overflow": int(os.getenv("DB_MAX_OVERFLOW", "20")),
+            "pool_timeout": int(os.getenv("DB_POOL_TIMEOUT", "30")),
+            "pool_recycle": int(os.getenv("DB_POOL_RECYCLE", "1800")),
+        })
 
     engine = create_engine(
         db_url,
         connect_args=connect_args,
-        pool_pre_ping=True,
+        **engine_kwargs,
     )
 
     if db_url.startswith("sqlite"):
@@ -115,6 +133,19 @@ def check_db_health(engine: Optional[Engine] = None) -> bool:
         return True
     except Exception:
         return False
+
+
+def wait_for_db(engine: Optional[Engine] = None, max_retries: int = 15, delay: float = 0.5) -> bool:
+    """
+    Waits for the database to become reachable.
+    Useful during container orchestration startup when PostgreSQL is initializing.
+    """
+    eng = engine or get_engine()
+    for _ in range(max_retries):
+        if check_db_health(eng):
+            return True
+        time.sleep(delay)
+    return False
 
 
 def init_db(engine: Optional[Engine] = None) -> None:

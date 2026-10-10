@@ -23,6 +23,12 @@ lint:
 ps:
 	docker compose ps
 
+db-shell:
+	docker compose exec db psql -U postgres -d lifecycle
+
+test-postgres:
+	docker compose run --rm -e DATABASE_URL=postgresql://postgres:postgres@db:5432/lifecycle backend pytest
+
 logs:
 	docker compose logs -f
 

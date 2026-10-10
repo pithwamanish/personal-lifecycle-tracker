@@ -6,15 +6,17 @@ Welcome to the **Personal Lifecycle Tracker** repository. This project manages R
 
 ## 1. Project Overview & Architecture
 
-- **Backend**: FastAPI (Python 3.11), Uvicorn, Pydantic v2, PyJWT.
+- **Backend**: FastAPI (Python 3.11), Uvicorn, Pydantic v2, PyJWT, SQLAlchemy, psycopg2.
 - **Frontend**: React 19, TypeScript, Vite 8, Tailwind CSS v4, Lucide icons.
-- **Orchestration**: Docker Compose multi-service architecture (Backend + Frontend).
+- **Database**: PostgreSQL 16 containerized (`postgres:16-alpine`) or SQLite fallback.
+- **Orchestration**: Docker Compose multi-service architecture (Database + Backend + Frontend).
 - **Production Gateway**: Caddy 2 minimal reverse proxy with SPA fallback and security headers.
 - **Contract**: OpenAPI 3.0.3 specification frozen in [`contracts/openapi.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/contracts/openapi.yaml).
 
 ### Network & Port Layout
 | Service | Container Port | Host Port (Configurable) | Health / Status Endpoint |
 |---|---|---|---|
+| **Database (PostgreSQL)** | `5432` | `5434` (`${POSTGRES_PORT:-5434}`) | `pg_isready -U postgres -d lifecycle` |
 | **Backend (Dev)** | `8000` | `8003` (`${BACKEND_PORT:-8003}`) | `http://localhost:8003/health` |
 | **Frontend (Dev)** | `3000` | `3003` (`${FRONTEND_PORT:-3003}`) | `http://localhost:3003/` |
 | **API Docs (Swagger)** | `8000` | `8003` | `http://localhost:8003/docs` |
@@ -147,13 +149,19 @@ Create an optional `.env` file in the project root to override defaults:
 BACKEND_PORT=8003
 FRONTEND_PORT=3003
 PROD_PORT=8088
+POSTGRES_PORT=5434
 
 # Application environment
 APP_ENV=development
 PYTHONUNBUFFERED=1
 
-# Database connection (SQLite default, or PostgreSQL e.g. postgresql://user:pass@host:5432/db)
-DATABASE_URL=sqlite:///./lifecycle.db
+# Database connection (PostgreSQL default in Compose, or SQLite e.g. sqlite:///./lifecycle.db)
+DATABASE_URL=postgresql://postgres:postgres@db:5432/lifecycle
+
+# PostgreSQL service credentials (used when running via Docker Compose)
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=lifecycle
 
 # Frontend API routing
 VITE_API_URL=http://localhost:8003

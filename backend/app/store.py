@@ -18,6 +18,8 @@ from app.database import (
     create_engine_for_url,
     get_database_url,
     init_db,
+    is_postgres_url,
+    wait_for_db,
 )
 from app.db_models import (
     DailyDigestConfigModel,
@@ -139,6 +141,9 @@ class DatabaseStore:
             bind=self.engine,
         )
         self._lock = threading.Lock()
+        # For remote databases like PostgreSQL, wait briefly for connection readiness
+        if is_postgres_url(self.database_url):
+            wait_for_db(self.engine, max_retries=15, delay=0.5)
 
         # Initialize schema tables
         init_db(self.engine)
