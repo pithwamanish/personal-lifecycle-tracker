@@ -118,6 +118,86 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "FastAPI backend service health and active version metadata",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "text": "OFFLINE"
+                },
+                "1": {
+                  "color": "green",
+                  "text": "ACTIVE"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "app_info{deployment_environment=~\"$environment\", service_version=~\"$version\"}",
+          "legendFormat": "{{service_name}} [{{deployment_environment}}: {{service_version}}]",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Backend Service & Active Version",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "description": "Total spans accepted by OpenTelemetry Collector",
       "fieldConfig": {
         "defaults": {
@@ -139,8 +219,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 9,
-        "x": 6,
+        "w": 6,
+        "x": 12,
         "y": 1
       },
       "id": 2,
@@ -197,8 +277,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 9,
-        "x": 15,
+        "w": 6,
+        "x": 18,
         "y": 1
       },
       "id": 3,
@@ -402,6 +482,190 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "KPI summary counters across all core product domain metrics filtered by environment and deployed version",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(app_items_created_total{deployment_environment=~\"$environment\", service_version=~\"$version\"})",
+          "legendFormat": "Items Created",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(app_items_completed_total{deployment_environment=~\"$environment\", service_version=~\"$version\"})",
+          "legendFormat": "Items Completed",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(app_items_deleted_total{deployment_environment=~\"$environment\", service_version=~\"$version\"})",
+          "legendFormat": "Items Deleted",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(app_lifecycle_items_current{deployment_environment=~\"$environment\", service_version=~\"$version\", status=\"active\"})",
+          "legendFormat": "Active Items",
+          "range": true,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(app_lifecycle_items_current{deployment_environment=~\"$environment\", service_version=~\"$version\", status=\"overdue\"})",
+          "legendFormat": "Overdue Items",
+          "range": true,
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(app_user_signups_total{deployment_environment=~\"$environment\", service_version=~\"$version\"})",
+          "legendFormat": "User Signups",
+          "range": true,
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(app_user_logins_total{deployment_environment=~\"$environment\", service_version=~\"$version\", status=\"success\"})",
+          "legendFormat": "Logins (Success)",
+          "range": true,
+          "refId": "G"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(app_user_logins_total{deployment_environment=~\"$environment\", service_version=~\"$version\", status=\"failure\"})",
+          "legendFormat": "Logins (Failed)",
+          "range": true,
+          "refId": "H"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(app_groups_created_total{deployment_environment=~\"$environment\", service_version=~\"$version\"})",
+          "legendFormat": "Groups Created",
+          "range": true,
+          "refId": "I"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(app_group_members_invited_total{deployment_environment=~\"$environment\", service_version=~\"$version\"})",
+          "legendFormat": "Members Invited",
+          "range": true,
+          "refId": "J"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(app_digests_generated_total{deployment_environment=~\"$environment\", service_version=~\"$version\", status=\"success\"})",
+          "legendFormat": "Digests Sent",
+          "range": true,
+          "refId": "K"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(app_reminders_summary_requests_total{deployment_environment=~\"$environment\", service_version=~\"$version\"})",
+          "legendFormat": "Reminder Requests",
+          "range": true,
+          "refId": "L"
+        }
+      ],
+      "title": "Personal Lifecycle Tracker — Product & Domain Metrics Overview",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "description": "Lifecycle items created over time by type (renewals, maintenance, warranties)",
       "fieldConfig": {
         "defaults": {
@@ -418,9 +682,9 @@
       },
       "gridPos": {
         "h": 7,
-        "w": 12,
+        "w": 8,
         "x": 0,
-        "y": 15
+        "y": 20
       },
       "id": 6,
       "options": {
@@ -470,9 +734,9 @@
       },
       "gridPos": {
         "h": 7,
-        "w": 12,
-        "x": 12,
-        "y": 15
+        "w": 8,
+        "x": 8,
+        "y": 20
       },
       "id": 7,
       "options": {
@@ -506,6 +770,58 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Lifecycle items permanently deleted over time",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 20,
+            "lineWidth": 2
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 20
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(app_items_deleted_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[15m])) by (lifecycle_type)",
+          "legendFormat": "{{lifecycle_type}} deleted",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Lifecycle Items Deleted by Type",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "description": "Daily morning email digests generated and reminder summaries requested",
       "fieldConfig": {
         "defaults": {
@@ -524,7 +840,7 @@
         "h": 7,
         "w": 8,
         "x": 0,
-        "y": 22
+        "y": 27
       },
       "id": 8,
       "options": {
@@ -569,7 +885,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "User signups, logins, and collaborative groups created",
+      "description": "User signups, logins, collaborative groups created, and member invitations",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -587,7 +903,7 @@
         "h": 7,
         "w": 8,
         "x": 8,
-        "y": 22
+        "y": 27
       },
       "id": 9,
       "options": {
@@ -633,6 +949,17 @@
           "legendFormat": "Groups Created",
           "range": true,
           "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(app_group_members_invited_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[1h]))",
+          "legendFormat": "Members Invited",
+          "range": true,
+          "refId": "D"
         }
       ],
       "title": "User Accounts & Collaboration Activity",
@@ -661,7 +988,7 @@
         "h": 7,
         "w": 8,
         "x": 16,
-        "y": 22
+        "y": 27
       },
       "id": 10,
       "options": {
@@ -687,6 +1014,89 @@
         }
       ],
       "title": "Current Items by Status & Type",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Lifecycle item operations throughput rate comparing item creation, completion, and deletion",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Ops / sec",
+            "axisPlacement": "auto",
+            "fillOpacity": 15,
+            "lineWidth": 2
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(app_items_created_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[5m])) by (lifecycle_type)",
+          "legendFormat": "Created: {{lifecycle_type}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(app_items_completed_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[5m])) by (lifecycle_type)",
+          "legendFormat": "Completed: {{lifecycle_type}}",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(app_items_deleted_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[5m])) by (lifecycle_type)",
+          "legendFormat": "Deleted: {{lifecycle_type}}",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Lifecycle Operations Rate (Created vs Completed vs Deleted)",
       "type": "timeseries"
     }
   ],
@@ -736,7 +1146,7 @@
         "name": "version",
         "options": [],
         "query": {
-          "query": "label_values(service_version)",
+          "query": "label_values({deployment_environment=~\"$environment\"}, service_version)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
@@ -763,6 +1173,6 @@
   "timezone": "browser",
   "title": "Personal Lifecycle Tracker — Observability Overview",
   "uid": "lifecycle-tracker-overview",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

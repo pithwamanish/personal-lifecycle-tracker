@@ -118,10 +118,30 @@ Prometheus evaluates alerting rules every 5s with mandatory `service`, `environm
 
 ---
 
-## 7. Grafana Dashboard Dynamic Filtering
+## 7. Grafana Dashboard Panels & Dynamic Filtering (`observability/grafana/dashboards/lifecycle-tracker-overview.json`)
 
-The pre-provisioned Grafana dashboard (`lifecycle-tracker-overview.json`) includes top-level dynamic template filters:
-- **`$environment`**: Populated via `label_values(deployment_environment)`.
-- **`$version`**: Populated via `label_values(service_version)`.
+The pre-provisioned Grafana dashboard (`lifecycle-tracker-overview.json`) provides comprehensive observability into application health, HTTP traffic, and core product metrics, with top-level dynamic filtering:
 
-All dashboard queries dynamically slice metrics by the selected environment and release version.
+### A. Dynamic Template Variables (Cascading Environment & Version Filters)
+- **`$environment`**: Populated via `label_values(deployment_environment)`. Multi-select enabled, includes `All` option.
+- **`$version`**: Populated via `label_values({deployment_environment=~"$environment"}, service_version)`. Dynamically cascades based on selected environment. Multi-select enabled, includes `All` option.
+
+### B. Dashboard Panels & Metric Hierarchy
+1. **Row 100: Application Health & Golden Signals**
+   - **OTel Collector Status**: Collector scrape target operational status (`up{job="otel-collector"}`).
+   - **Backend Service & Active Version**: FastAPI service health and active version metadata (`app_info{deployment_environment=~"$environment", service_version=~"$version"}`).
+   - **Ingested Span Rate**: Span ingestion rate via Collector (`otelcol_receiver_accepted_spans`).
+   - **Ingested Log Records Rate**: Log records ingestion rate (`otelcol_receiver_accepted_log_records`).
+2. **Row 101: Application Traffic & HTTP Performance**
+   - **HTTP Request Rate by Route**: RPS grouped by route and status code (`app_http_server_duration_milliseconds_count{deployment_environment=~"$environment", service_version=~"$version"}`).
+   - **HTTP Server Latency Percentiles**: p50, p90, and p99 request latency percentiles (`app_http_server_duration_milliseconds_bucket{deployment_environment=~"$environment", service_version=~"$version"}`).
+3. **Row 102: Product Metrics — Renewals, Maintenance, Warranties & Reminders**
+   - **Personal Lifecycle Tracker — Product & Domain Metrics Overview**: Master KPI stat panel displaying all core product counters (`app_items_created_total`, `app_items_completed_total`, `app_items_deleted_total`, active/overdue `app_lifecycle_items_current`, `app_user_signups_total`, success/failed `app_user_logins_total`, `app_groups_created_total`, `app_group_members_invited_total`, `app_digests_generated_total`, `app_reminders_summary_requests_total`).
+   - **Lifecycle Items Created by Type**: Time-series creation volume across renewals, maintenance, and warranties (`app_items_created_total`).
+   - **Lifecycle Items Completed by Type**: Time-series completion actions (`app_items_completed_total`).
+   - **Lifecycle Items Deleted by Type**: Time-series item deletion and churn (`app_items_deleted_total`).
+   - **Daily Email Digests & In-App Reminders**: Scheduled morning email digest runs and in-app reminders drawer views (`app_digests_generated_total`, `app_reminders_summary_requests_total`).
+   - **User Accounts & Collaboration Activity**: User signups, logins, groups created, and member invitations (`app_user_signups_total`, `app_user_logins_total`, `app_groups_created_total`, `app_group_members_invited_total`).
+   - **Current Items by Status & Type**: Current item status distribution (`app_lifecycle_items_current`).
+   - **Lifecycle Operations Rate (Created vs Completed vs Deleted)**: Real-time throughput comparing creation, completion, and deletion rates.
+
