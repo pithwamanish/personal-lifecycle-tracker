@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""
+Normalized Alert Receiver and On-Call Handler.
+Accepts raw Prometheus / Alertmanager JSON from stdin or file, normalizes it according
+to payload-schema.json, generates the incident prompt, and outputs the normalized structure.
+"""
+
+import sys
+import json
+import os
+import re
+from datetime import datetime, timezone
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ON_CALL_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(ON_CALL_DIR, ".."))
+
+def normalize_alert_payload(raw_data):
+    # Check if raw_data is Prometheus / Alertmanager format with "alerts" array
+    if "alerts" in raw_data and isinstance(raw_data["alerts"], list) and len(raw_data["alerts"]) > 0:
+        alert = raw_data["alerts"][0]
+        labels = alert.get("labels", {})
+        annotations = alert.get("annotations", {})
+        
+        return {
+            "alert_name": labels.get("alertname", labels.get("alert_name", "UnknownAlert")),
+            "alert_state": alert.get("state", alert.get("status", "firing")),
+            "severity": labels.get("severity", "warning"),
+            "service_name": labels.get("service", labels.get("service_name", "api-backend")),
+            "deployment_environment": labels.get("environment", labels.get("deployment_environment", "development")),
+            "service_version": labels.get("version", labels.get("service_version", "dev-latest")),
+            "summary": annotations.get("summary", f"Alert {labels.get('alertname', 'Unknown')} firing"),
+            "description": annotations.get("description", "Prometheus alert breached threshold"),
+            "observed_value": annotations.get("observed_value", alert.get("value", None)),
+            "threshold": annotations.get("threshold", None),
+            "duration": annotations.get("duration", "1m"),
+            "dashboard_url": annotations.get("dashboard_url", "http://localhost:3004/d/lifecycle-tracker-overview"),
+            "runbook_url": annotations.get("runbook_url", "on-call-engineer/runbook.md"),
+            "timestamp": alert.get("activeAt", alert.get("startsAt", datetime.now(timezone.utc).isoformat())),
+            "labels": labels,
+            "annotations": annotations
+        }
+    elif isinstance(raw_data, list) and len(raw_data) > 0:
+        # Alertmanager array of alerts
+        alert = raw_data[0]
+        labels = alert.get("labels", {})
+        annotations = alert.get("annotations", {})
+        status = alert.get("status", {})
+        state = status.get("state", "firing") if isinstance(status, dict) else str(status)
+
+        return {
+            "alert_name": labels.get("alertname", labels.get("alert_name", "UnknownAlert")),
+            "alert_state": state,
+            "severity": labels.get("severity", "warning"),
+            "service_name": labels.get("service", labels.get("service_name", "api-backend")),
+            "deployment_environment": labels.get("environment", labels.get("deployment_environment", "development")),
+            "service_version": labels.get("version", labels.get("service_version", "dev-latest")),
+            "summary": annotations.get("summary", "Alertmanager alert firing"),
+            "description": annotations.get("description", "Alertmanager alert breached threshold"),
+            "observed_value": annotations.get("observed_value", None),
+            "threshold": annotations.get("threshold", None),
+            "duration": annotations.get("duration", "1m"),
+            "dashboard_url": annotations.get("dashboard_url", "http://localhost:3004/d/lifecycle-tracker-overview"),
+            "runbook_url": annotations.get("runbook_url", "on-call-engineer/runbook.md"),
+            "timestamp": alert.get("startsAt", datetime.now(timezone.utc).isoformat()),
+            "labels": labels,
+            "annotations": annotations
+        }
+    else:
+        # Single alert or already normalized dictionary
+        labels = raw_data.get("labels", {})
+        annotations = raw_data.get("annotations", {})
+        
+        return {
+            "alert_name": raw_data.get("alert_name", labels.get("alertname", "HighHttpErrorRate")),
+            "alert_state": raw_data.get("alert_state", "firing"),
+            "severity": raw_data.get("severity", labels.get("severity", "critical")),
+            "service_name": raw_data.get("service_name", labels.get("service", "api-backend")),
+            "deployment_environment": raw_data.get("deployment_environment", labels.get("environment", "development")),
+            "service_version": raw_data.get("service_version", labels.get("version", "dev-latest")),
+            "summary": raw_data.get("summary", annotations.get("summary", "Elevated HTTP error rate")),
+            "description": raw_data.get("description", annotations.get("description", "HTTP 500 error rate exceeded 5%")),
+            "observed_value": raw_data.get("observed_value", 12.5),
+            "threshold": raw_data.get("threshold", 5.0),
+            "duration": raw_data.get("duration", "1m"),
+            "dashboard_url": raw_data.get("dashboard_url", "http://localhost:3004/d/lifecycle-tracker-overview"),
+            "runbook_url": raw_data.get("runbook_url", "on-call-engineer/runbook.md"),
+            "timestamp": raw_data.get("timestamp", datetime.now(timezone.utc).isoformat()),
+            "labels": labels,
+            "annotations": annotations
+        }
+
+def render_prompt(normalized, prompt_template_path):
+    with open(prompt_template_path, "r") as f:
+        template = f.read()
+
+    rendered = template
+    for key, val in normalized.items():
+        placeholder = f"{{{{{key}}}}}"
+        str_val = "" if val is None else str(val)
+        rendered = rendered.replace(placeholder, str_val)
+    return rendered
+
+def main():
+    if len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
+        with open(sys.argv[1], "r") as f:
+            raw = json.load(f)
+    elif not sys.stdin.isatty():
+        raw = json.load(sys.stdin)
+    else:
+        print("Usage: receive-alert [payload.json] or pipe JSON via stdin", file=sys.stderr)
+        sys.exit(1)
+
+    normalized = normalize_alert_payload(raw)
+    
+    # Save normalized incident payload
+    incidents_dir = os.path.join(PROJECT_ROOT, "_docs", "incidents")
+    os.makedirs(incidents_dir, exist_ok=True)
+    
+    ts = int(datetime.now().timestamp())
+    clean_alert_name = re.sub(r'[^a-zA-Z0-9_-]', '_', normalized["alert_name"])
+    incident_file = os.path.join(incidents_dir, f"incident-{ts}-{clean_alert_name}.json")
+    with open(incident_file, "w") as f:
+        json.dump(normalized, f, indent=2)
+
+    # Render prompt
+    prompt_template_path = os.path.join(ON_CALL_DIR, "prompt.md")
+    rendered_prompt = render_prompt(normalized, prompt_template_path)
+
+    rendered_prompt_file = os.path.join(incidents_dir, f"prompt-{ts}-{clean_alert_name}.md")
+    with open(rendered_prompt_file, "w") as f:
+        f.write(rendered_prompt)
+
+    output = {
+        "status": "NORMALIZED",
+        "incident_file": incident_file,
+        "prompt_file": rendered_prompt_file,
+        "alert_name": normalized["alert_name"],
+        "alert_state": normalized["alert_state"],
+        "service": normalized["service_name"],
+        "severity": normalized["severity"]
+    }
+    print(json.dumps(output, indent=2))
+
+if __name__ == "__main__":
+    main()

@@ -168,4 +168,9 @@ ci-validate:
 promote-validate:
 	act -n -W .github/workflows/promote-dev-to-prod.yml
 
+# On-Call Engineer & Autonomous Incident Response
+on-call-poll:
+	python3 on-call-engineer/poll-alerts.py
 
+on-call-verify:
+	bash on-call-engineer/scripts/verify

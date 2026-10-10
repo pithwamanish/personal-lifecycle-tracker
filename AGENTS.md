@@ -252,6 +252,14 @@ VITE_BACKEND_URL=http://backend:8000
 │   └── grafana/
 │       ├── dashboards/        # Pre-provisioned Golden Signals overview dashboard
 │       └── provisioning/      # Automated datasources (Loki, Tempo, Prometheus) & dashboards
+├── on-call-engineer/          # Autonomous On-Call Incident Responder
+│   ├── poll-alerts.py         # Observability alert poller (runs every minute)
+│   ├── payload-schema.json    # JSON schema for normalized incident payloads
+│   ├── autonomy-policy.json   # Code-enforced autonomy levels & permissions
+│   ├── prompt.md              # Prompt template for headless coding agent
+│   ├── runbook.md             # Triage runbook for Prometheus alerts
+│   ├── README.md              # On-call operating guide & commands
+│   └── scripts/               # Poller, agent invoker & verification scripts
 ├── openapi.yaml               # Root API contract
 ├── contracts/
 │   └── openapi.yaml           # Frozen canonical contract

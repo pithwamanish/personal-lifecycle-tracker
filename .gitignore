@@ -28,4 +28,8 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
-
+# Incidents & On-Call Evidence
+on-call-engineer/evidence.json
+_docs/incidents/*.json
+_docs/incidents/*.md
+!_docs/incidents/.gitkeep

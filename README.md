@@ -197,3 +197,21 @@ make lint
 # Run Playwright E2E browser tests
 make test-e2e
 ```
+
+---
+
+## On-Call Engineer & Autonomous Incident Response
+
+The repository includes an autonomous on-call monitoring and incident remediation pipeline under [`on-call-engineer/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/on-call-engineer/README.md):
+
+- **Alert Poller** ([`on-call-engineer/poll-alerts.py`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/on-call-engineer/poll-alerts.py)): Continuously polls the Prometheus alert API (`http://localhost:9091/api/v1/alerts`) every minute.
+- **Headless Agent Dispatch**: When an alert fires, details are normalized to [`payload-schema.json`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/on-call-engineer/payload-schema.json) and dispatched to a headless coding agent (`agy`, `claude -p`, or autonomous incident responder loop).
+- **Code-Enforced Autonomy**: Permissions are enforced outside the model via [`autonomy-policy.json`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/on-call-engineer/autonomy-policy.json) and [`authorize-action`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/on-call-engineer/scripts/authorize-action).
+
+```bash
+# Run continuous alert poller (every 60s)
+make on-call-poll
+
+# Run verification suite proving alert detection, prompt rendering, and agent dispatch
+make on-call-verify
+```

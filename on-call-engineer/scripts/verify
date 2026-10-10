@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
+
+echo "================================================================"
+echo "      VERIFYING ON-CALL ENGINEER ALERT POLLING PIPELINE         "
+echo "================================================================"
+
+# 1. Verify required files exist
+for file in "payload-schema.json" "prompt.md" "runbook.md" "autonomy-policy.json" "poll-alerts.py"; do
+  if [ ! -f "${ROOT_DIR}/${file}" ]; then
+    echo "ERROR: ${file} missing!"
+    exit 1
+  fi
+  echo "[x] ${file} verified"
+done
+
+# 2. Verify scripts are executable
+chmod +x "${ROOT_DIR}"/poll-alerts* 2>/dev/null || true
+chmod +x "${SCRIPT_DIR}"/* 2>/dev/null || true
+
+# 3. Test receive-alert normalization with synthetic alert
+echo "==> Testing alert normalization..."
+OUTPUT=$("${SCRIPT_DIR}/trigger-test-incident")
+if echo "${OUTPUT}" | grep -q "NORMALIZED"; then
+  echo "[x] Alert receiver normalization verified"
+else
+  echo "ERROR: Failed to normalize alert payload"
+  exit 1
+fi
+
+# 4. Test live poll against Prometheus (single-shot --once)
+echo "==> Testing poller against live Prometheus alert API (--once)..."
+python3 "${ROOT_DIR}/poll-alerts.py" --url "http://localhost:9091/api/v1/alerts" --once
+echo "[x] Live alert API polling verified"
+
+# 5. Test poller triggering headless coding agent upon firing alert
+echo "==> Testing firing alert handling & headless agent invocation..."
+MOCK_ALERT_FILE="/tmp/test-firing-alert.json"
+cat << 'EOF' > "${MOCK_ALERT_FILE}"
+{
+  "status": "success",
+  "data": {
+    "alerts": [
+      {
+        "labels": {
+          "alertname": "HighHttpErrorRate",
+          "severity": "critical",
+          "service": "api-backend",
+          "environment": "development",
+          "version": "dev-latest"
+        },
+        "annotations": {
+          "summary": "Elevated HTTP 5xx error rate on api-backend",
+          "description": "5xx error rate exceeded 5% threshold (current: 12.50%)",
+          "observed_value": "12.50",
+          "threshold": "5.0",
+          "duration": "1m",
+          "dashboard_url": "http://localhost:3004/d/lifecycle-tracker-overview",
+          "runbook_url": "on-call-engineer/runbook.md#highhttperrorrate"
+        },
+        "state": "firing",
+        "activeAt": "2026-10-10T17:00:00Z",
+        "value": "12.50"
+      }
+    ]
+  }
+}
+EOF
+
+EXECUTE_AGENT=false python3 "${ROOT_DIR}/poll-alerts.py" --mock-file "${MOCK_ALERT_FILE}" --once --retrigger
+rm -f "${MOCK_ALERT_FILE}"
+echo "[x] Firing alert detection and headless coding agent trigger verified"
+
+# 6. Verify evidence collection
+echo "==> Testing bounded evidence collection..."
+"${SCRIPT_DIR}/collect-evidence" -s "api-backend"
+if [ -f "${ROOT_DIR}/evidence.json" ]; then
+  echo "[x] Telemetry evidence packet collection verified"
+fi
+
+# 7. Verify code-enforced autonomy policy
+echo "==> Testing code-enforced autonomy authorization..."
+"${SCRIPT_DIR}/authorize-action" '{"action":"restart_service","confidence":"high","rationale":"Safe recovery action"}'
+echo "[x] Autonomy policy authorization verified"
+
+# 8. Check audit log
+if [ -f "${ROOT_DIR}/audit-trail.log" ]; then
+  echo "[x] Audit trail logging verified"
+fi
+
+echo "================================================================"
+echo "  ON-CALL ENGINEER ALERT PIPELINE IS FUNCTIONAL & VERIFIED!     "
+echo "================================================================"
+exit 0

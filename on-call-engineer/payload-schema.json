@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NormalizedIncidentContext",
+  "type": "object",
+  "required": [
+    "alert_name",
+    "alert_state",
+    "severity",
+    "service_name",
+    "deployment_environment",
+    "service_version",
+    "summary",
+    "description",
+    "dashboard_url",
+    "runbook_url",
+    "timestamp"
+  ],
+  "properties": {
+    "alert_name": {
+      "type": "string",
+      "description": "Unique identifier of the alert (e.g. HighHttpErrorRate)"
+    },
+    "alert_state": {
+      "type": "string",
+      "enum": ["firing", "resolved"],
+      "description": "Status of the alert"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["critical", "warning", "info"],
+      "description": "Severity level of the incident"
+    },
+    "service_name": {
+      "type": "string",
+      "description": "Logical service name originating the telemetry (e.g. api-backend)"
+    },
+    "deployment_environment": {
+      "type": "string",
+      "description": "Deployment environment (development, staging, production)"
+    },
+    "service_version": {
+      "type": "string",
+      "description": "Deployed commit SHA or release version"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Short human-readable summary of the degradation"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed explanation of observed threshold breach"
+    },
+    "observed_value": {
+      "type": ["number", "string", "null"],
+      "description": "Value observed at breach time"
+    },
+    "threshold": {
+      "type": ["number", "string", "null"],
+      "description": "Configured alert threshold"
+    },
+    "duration": {
+      "type": "string",
+      "description": "Evaluation window duration (e.g. 1m, 30s)"
+    },
+    "dashboard_url": {
+      "type": "string",
+      "description": "Direct Grafana link filtered by environment and version"
+    },
+    "runbook_url": {
+      "type": "string",
+      "description": "Link or relative path to triage instructions"
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "ISO 8601 UTC timestamp of alert trigger"
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "annotations": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    }
+  },
+  "additionalProperties": true
+}
