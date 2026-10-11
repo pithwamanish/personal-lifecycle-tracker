@@ -299,6 +299,11 @@ def init_opentelemetry(app: FastAPI) -> None:
     if is_test_env:
         return
 
+    otlp_endpoint = (os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT") or "").strip()
+    if not otlp_endpoint or (not otlp_endpoint.startswith("http://") and not otlp_endpoint.startswith("https://")):
+        logger.info("Remote OTLP exporter skipped (no valid http/https endpoint configured)")
+        return
+
     try:
         from opentelemetry import metrics as otel_metrics
         from opentelemetry import trace as otel_trace
