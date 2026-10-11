@@ -106,7 +106,11 @@
         "iam:GetRole",
         "iam:TagRole",
         "iam:AttachRolePolicy",
-        "iam:DetachRolePolicy"
+        "iam:DetachRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:GetRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListInstanceProfilesForRole"
       ],
       "Resource": [
         "arn:aws:iam::*:role/personal-lifecycle-tracker-*-role",
@@ -152,102 +156,20 @@
       "Resource": "*"
     },
     {
-      "Sid": "ECRRepositoryAndImageManagement",
-      "Effect": "Allow",
-      "Action": [
-        "ecr:GetAuthorizationToken",
-        "ecr:BatchCheckLayerAvailability",
-        "ecr:GetDownloadUrlForLayer",
-        "ecr:BatchGetImage",
-        "ecr:PutImage",
-        "ecr:InitiateLayerUpload",
-        "ecr:UploadLayerPart",
-        "ecr:CompleteLayerUpload",
-        "ecr:CreateRepository",
-        "ecr:DeleteRepository",
-        "ecr:DescribeRepositories",
-        "ecr:ListImages",
-        "ecr:PutLifecyclePolicy",
-        "ecr:GetLifecyclePolicy",
-        "ecr:SetRepositoryPolicy"
-      ],
-      "Resource": "*"
-    },
-    {
       "Sid": "S3FrontendBucketManagement",
       "Effect": "Allow",
       "Action": [
         "s3:CreateBucket",
         "s3:DeleteBucket",
-        "s3:ListBucket",
-        "s3:GetBucketLocation",
-        "s3:PutObject",
-        "s3:GetObject",
-        "s3:DeleteObject",
-        "s3:PutBucketPolicy",
-        "s3:GetBucketPolicy",
-        "s3:PutBucketPublicAccessBlock",
-        "s3:GetBucketPublicAccessBlock"
+        "s3:Get*",
+        "s3:Put*",
+        "s3:DeleteObject*",
+        "s3:List*"
       ],
       "Resource": [
         "arn:aws:s3:::personal-lifecycle-tracker-*",
         "arn:aws:s3:::personal-lifecycle-tracker-*/*"
       ]
-    },
-    {
-      "Sid": "LambdaFunctionManagement",
-      "Effect": "Allow",
-      "Action": [
-        "lambda:CreateFunction",
-        "lambda:DeleteFunction",
-        "lambda:GetFunction",
-        "lambda:GetFunctionConfiguration",
-        "lambda:UpdateFunctionCode",
-        "lambda:UpdateFunctionConfiguration",
-        "lambda:CreateFunctionUrlConfig",
-        "lambda:GetFunctionUrlConfig",
-        "lambda:UpdateFunctionUrlConfig",
-        "lambda:AddPermission",
-        "lambda:RemovePermission"
-      ],
-      "Resource": "arn:aws:lambda:*:*:function:personal-lifecycle-tracker-*"
-    },
-    {
-      "Sid": "CloudFrontDistributionManagement",
-      "Effect": "Allow",
-      "Action": [
-        "cloudfront:CreateDistribution",
-        "cloudfront:GetDistribution",
-        "cloudfront:UpdateDistribution",
-        "cloudfront:DeleteDistribution",
-        "cloudfront:CreateOriginAccessControl",
-        "cloudfront:GetOriginAccessControl",
-        "cloudfront:CreateInvalidation"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Sid": "EventBridgeSchedulerManagement",
-      "Effect": "Allow",
-      "Action": [
-        "events:PutRule",
-        "events:DeleteRule",
-        "events:DescribeRule",
-        "events:PutTargets",
-        "events:RemoveTargets"
-      ],
-      "Resource": "arn:aws:events:*:*:rule/personal-lifecycle-tracker-*"
-    },
-    {
-      "Sid": "CloudWatchLogsRetention",
-      "Effect": "Allow",
-      "Action": [
-        "logs:CreateLogGroup",
-        "logs:DeleteLogGroup",
-        "logs:DescribeLogGroups",
-        "logs:PutRetentionPolicy"
-      ],
-      "Resource": "arn:aws:logs:*:*:log-group:/aws/lambda/personal-lifecycle-tracker-*:*"
     },
     {
       "Sid": "ZeroTrustExplicitDenySecurityBoundaries",

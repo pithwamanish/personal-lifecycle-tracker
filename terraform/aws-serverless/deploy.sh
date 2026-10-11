@@ -8,7 +8,7 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TF_DIR="${PROJECT_ROOT}/terraform/aws-serverless"
-AWS_REGION="${AWS_DEFAULT_REGION:-us-east-1}"
+AWS_REGION="${AWS_DEFAULT_REGION:-ap-south-1}"
 AWS_CLI_IMAGE="amazon/aws-cli:latest"
 TF_IMAGE="hashicorp/terraform:1.7.5"
 NODE_IMAGE="node:20-alpine"
@@ -68,7 +68,7 @@ docker run --rm \
   -e AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN:-}" \
   -e AWS_DEFAULT_REGION="${AWS_REGION}" \
   -w /workspace \
-  "${TF_IMAGE}" apply -target=aws_ecr_repository.backend -auto-approve
+  "${TF_IMAGE}" apply -target=aws_ecr_repository.backend -target=aws_ecr_repository_policy.backend_lambda -auto-approve
 
 ECR_REPO_URL=$(docker run --rm \
   -v "${TF_DIR}:/workspace" \

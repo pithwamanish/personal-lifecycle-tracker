@@ -49,7 +49,7 @@ resource "aws_lambda_function" "backend" {
       APP_ENV                     = var.environment
       PORT                        = "8000"
       PYTHONUNBUFFERED            = "1"
-      AWS_LWA_INVOKE_MODE         = "response_stream"
+      AWS_LWA_INVOKE_MODE         = "buffered"
       OTEL_EXPORTER_OTLP_ENDPOINT = var.otel_exporter_otlp_endpoint
       OTEL_EXPORTER_OTLP_HEADERS  = var.otel_exporter_otlp_headers
     }
@@ -59,7 +59,10 @@ resource "aws_lambda_function" "backend" {
     ignore_changes = [image_uri]
   }
 
-  depends_on = [aws_cloudwatch_log_group.lambda_logs]
+  depends_on = [
+    aws_cloudwatch_log_group.lambda_logs,
+    aws_ecr_repository_policy.backend_lambda
+  ]
 }
 
 resource "aws_lambda_function_url" "backend_url" {
@@ -72,4 +75,19 @@ resource "aws_lambda_function_url" "backend_url" {
     allow_headers = ["*"]
     max_age       = 86400
   }
+}
+
+resource "aws_lambda_permission" "allow_public_function_url" {
+  statement_id           = "FunctionURLAllowPublicAccess"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.backend.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
+}
+
+resource "aws_lambda_permission" "allow_public_function_invoke" {
+  statement_id  = "FunctionURLAllowPublicInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.backend.function_name
+  principal     = "*"
 }

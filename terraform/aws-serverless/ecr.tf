@@ -27,3 +27,24 @@ resource "aws_ecr_lifecycle_policy" "backend" {
     ]
   })
 }
+
+resource "aws_ecr_repository_policy" "backend_lambda" {
+  repository = aws_ecr_repository.backend.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "LambdaECRImageRetrievalPolicy"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+        Action = [
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer"
+        ]
+      }
+    ]
+  })
+}
