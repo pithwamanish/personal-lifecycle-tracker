@@ -171,17 +171,17 @@ tf-validate: tf-validate-aws tf-validate-aws-prod tf-validate-render tf-validate
 
 # CloudFormation Validation
 cf-validate-dev:
-	docker run --rm -v $(CURDIR)/cloudformation:/cf -v $$HOME/.aws:/root/.aws:ro -e AWS_DEFAULT_REGION=us-east-1 $(AWS_CLI_IMAGE) cloudformation validate-template --template-body file:///cf/aws-ec2-compose.yaml
+	docker run --rm -v $(CURDIR)/cloudformation:/cf -v $$HOME/.aws:/root/.aws:ro -e AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION) $(AWS_CLI_IMAGE) cloudformation validate-template --template-body file:///cf/aws-ec2-compose.yaml
 
 cf-validate-prod:
-	docker run --rm -v $(CURDIR)/cloudformation:/cf -v $$HOME/.aws:/root/.aws:ro -e AWS_DEFAULT_REGION=us-east-1 $(AWS_CLI_IMAGE) cloudformation validate-template --template-body file:///cf/aws-ec2-compose-prod.yaml
+	docker run --rm -v $(CURDIR)/cloudformation:/cf -v $$HOME/.aws:/root/.aws:ro -e AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION) $(AWS_CLI_IMAGE) cloudformation validate-template --template-body file:///cf/aws-ec2-compose-prod.yaml
 
 cf-validate: cf-validate-dev cf-validate-prod
 
 # CloudFormation Deploy & Lifecycle Targets
 CF_STACK_DEV ?= personal-lifecycle-tracker-dev
 CF_STACK_PROD ?= personal-lifecycle-tracker-prod
-AWS_DEFAULT_REGION ?= us-east-1
+AWS_DEFAULT_REGION ?= ap-south-1
 
 cf-deploy-dev:
 	docker run --rm -v $(CURDIR)/cloudformation:/cf -v $$HOME/.aws:/root/.aws:ro \
@@ -189,7 +189,7 @@ cf-deploy-dev:
 	  $(AWS_CLI_IMAGE) cloudformation create-stack \
 	    --stack-name $(CF_STACK_DEV) \
 	    --template-body file:///cf/aws-ec2-compose.yaml \
-	    --parameters ParameterKey=Environment,ParameterValue=dev ParameterKey=AppPort,ParameterValue=80 \
+	    --parameters ParameterKey=Environment,ParameterValue=dev ParameterKey=AppPort,ParameterValue=80 ParameterKey=RepoUrl,ParameterValue=https://github.com/pithwamanish/personal-lifecycle-tracker.git \
 	    --capabilities CAPABILITY_NAMED_IAM \
 	    --region $(AWS_DEFAULT_REGION)
 
@@ -199,7 +199,7 @@ cf-deploy-prod:
 	  $(AWS_CLI_IMAGE) cloudformation create-stack \
 	    --stack-name $(CF_STACK_PROD) \
 	    --template-body file:///cf/aws-ec2-compose-prod.yaml \
-	    --parameters ParameterKey=Environment,ParameterValue=production ParameterKey=AppPort,ParameterValue=80 \
+	    --parameters ParameterKey=Environment,ParameterValue=production ParameterKey=AppPort,ParameterValue=80 ParameterKey=RepoUrl,ParameterValue=https://github.com/pithwamanish/personal-lifecycle-tracker.git \
 	    --capabilities CAPABILITY_NAMED_IAM \
 	    --region $(AWS_DEFAULT_REGION)
 

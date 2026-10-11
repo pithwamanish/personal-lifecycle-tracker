@@ -11,16 +11,18 @@
         "cloudformation:DescribeStacks",
         "cloudformation:DescribeStackEvents",
         "cloudformation:DescribeStackResources",
-        "cloudformation:GetTemplate",
-        "cloudformation:ListStacks"
+        "cloudformation:GetTemplate"
       ],
       "Resource": "arn:aws:cloudformation:*:*:stack/personal-lifecycle-tracker-*/*"
     },
     {
-      "Sid": "CloudFormationTemplateValidationGlobal",
+      "Sid": "CloudFormationGlobalStackActions",
       "Effect": "Allow",
       "Action": [
-        "cloudformation:ValidateTemplate"
+        "cloudformation:ValidateTemplate",
+        "cloudformation:ListStacks",
+        "cloudformation:ContinueUpdateRollback",
+        "cloudformation:CancelUpdateStack"
       ],
       "Resource": "*"
     },
@@ -76,7 +78,13 @@
         "ec2:StartInstances",
         "ec2:StopInstances",
         "ec2:DescribeInstances",
-        "ec2:DescribeInstanceStatus"
+        "ec2:DescribeInstanceStatus",
+        "ec2:ModifyInstanceAttribute",
+        "ec2:DescribeInstanceAttribute",
+        "ec2:GetConsoleOutput",
+        "ec2:AttachVolume",
+        "ec2:DetachVolume",
+        "ec2:DescribeVolumes"
       ],
       "Resource": "*"
     },
@@ -132,8 +140,14 @@
       "Effect": "Allow",
       "Action": [
         "ssm:StartSession",
+        "ssm:TerminateSession",
+        "ssm:ResumeSession",
         "ssm:DescribeInstanceInformation",
-        "ssm:GetConnectionStatus"
+        "ssm:GetConnectionStatus",
+        "ssm:SendCommand",
+        "ssm:GetCommandInvocation",
+        "ssm:ListCommandInvocations",
+        "ssm:ListCommands"
       ],
       "Resource": "*"
     },
