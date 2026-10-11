@@ -153,11 +153,19 @@ def main():
     except Exception as e:
         print(f"[!] Note: Org fetch: {e}")
 
-    # 1. Setup Datasource
-    client.ensure_datasource()
-    ds_info = client._request("GET", "/api/datasources/name/AWS-CloudFront-Prometheus")
-    ds_uid = ds_info.get("uid")
-    print(f"[+] Prometheus Datasource configured successfully (UID={ds_uid}).")
+    # 1. Identify Prometheus Datasource (e.g. grafanacloud-prom)
+    datasources = client._request("GET", "/api/datasources")
+    prom_ds = None
+    for ds in datasources:
+        if ds.get("uid") == "grafanacloud-prom":
+            prom_ds = ds
+            break
+        elif ds.get("type") == "prometheus" and not prom_ds:
+            prom_ds = ds
+
+    ds_uid = prom_ds.get("uid") if prom_ds else "grafanacloud-prom"
+    ds_name = prom_ds.get("name") if prom_ds else "grafanacloud-prom"
+    print(f"[+] Binding Dashboard to hosted Prometheus Datasource: {ds_name} (UID={ds_uid})")
 
     # 2. Import Dashboard
     dash_res = client.import_dashboard(ds_uid=ds_uid)
