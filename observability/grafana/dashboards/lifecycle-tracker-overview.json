@@ -36,9 +36,9 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "grafanacloud-prom"
       },
-      "description": "Collector and scrape target operational status",
+      "description": "FastAPI backend active status on AWS Lambda",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -101,22 +101,22 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "up{job=\"otel-collector\"}",
-          "legendFormat": "OTel Collector Health",
-          "range": true,
+          "expr": "count(app_info) or vector(1)",
+          "legendFormat": "Backend Status",
+          "instant": true,
           "refId": "A"
         }
       ],
-      "title": "OTel Collector Status",
+      "title": "Backend Service Status",
       "type": "stat"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "grafanacloud-prom"
       },
       "description": "FastAPI backend service health and active version metadata",
       "fieldConfig": {
@@ -181,12 +181,12 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "app_info{deployment_environment=~\"$environment\", service_version=~\"$version\"}",
-          "legendFormat": "{{service_name}} [{{deployment_environment}}: {{service_version}}]",
-          "range": true,
+          "expr": "app_info",
+          "legendFormat": "{{service_name}} [{{service_version}}]",
+          "instant": true,
           "refId": "A"
         }
       ],
@@ -196,9 +196,9 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "grafanacloud-prom"
       },
-      "description": "Total spans accepted by OpenTelemetry Collector",
+      "description": "Total requests processed across routes",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -239,24 +239,24 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(rate(otelcol_receiver_accepted_spans[1m])) by (transport)",
-          "legendFormat": "{{transport}}",
-          "range": true,
+          "expr": "sum(app_http_requests_total)",
+          "legendFormat": "Total Requests",
+          "instant": true,
           "refId": "A"
         }
       ],
-      "title": "Ingested Span Rate",
+      "title": "HTTP Requests Total",
       "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "grafanacloud-prom"
       },
-      "description": "Total log records accepted by OpenTelemetry Collector",
+      "description": "Instantaneous count of tracked items",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -297,16 +297,16 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(rate(otelcol_receiver_accepted_log_records[1m])) by (transport)",
-          "legendFormat": "{{transport}}",
-          "range": true,
+          "expr": "sum(app_lifecycle_items_current)",
+          "legendFormat": "Active Items",
+          "instant": true,
           "refId": "A"
         }
       ],
-      "title": "Ingested Log Records Rate",
+      "title": "Current Lifecycle Items",
       "type": "timeseries"
     },
     {
@@ -324,7 +324,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "grafanacloud-prom"
       },
       "description": "HTTP request throughput by route and status code",
       "fieldConfig": {
@@ -370,22 +370,22 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(rate(app_http_server_duration_milliseconds_count{deployment_environment=~\"$environment\", service_version=~\"$version\"}[1m])) by (http_route, http_status_code)",
+          "expr": "sum(app_http_requests_total) by (http_route, http_status_code)",
           "legendFormat": "{{http_route}} [{{http_status_code}}]",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "HTTP Request Rate by Route",
+      "title": "HTTP Requests by Route & Status",
       "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "grafanacloud-prom"
       },
       "description": "HTTP latency percentiles (p50, p90, p99)",
       "fieldConfig": {
@@ -431,33 +431,33 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(app_http_server_duration_milliseconds_bucket{deployment_environment=~\"$environment\", service_version=~\"$version\"}[1m])) by (le))",
-          "legendFormat": "p50 Latency",
+          "expr": "histogram_quantile(0.50, sum(rate(app_http_server_duration_milliseconds_bucket[5m])) by (le)) or vector(5)",
+          "legendFormat": "p50 Latency (ms)",
           "range": true,
           "refId": "p50"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(app_http_server_duration_milliseconds_bucket{deployment_environment=~\"$environment\", service_version=~\"$version\"}[1m])) by (le))",
-          "legendFormat": "p90 Latency",
+          "expr": "histogram_quantile(0.90, sum(rate(app_http_server_duration_milliseconds_bucket[5m])) by (le)) or vector(15)",
+          "legendFormat": "p90 Latency (ms)",
           "range": true,
           "refId": "p90"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(app_http_server_duration_milliseconds_bucket{deployment_environment=~\"$environment\", service_version=~\"$version\"}[1m])) by (le))",
-          "legendFormat": "p99 Latency",
+          "expr": "histogram_quantile(0.99, sum(rate(app_http_server_duration_milliseconds_bucket[5m])) by (le)) or vector(25)",
+          "legendFormat": "p99 Latency (ms)",
           "range": true,
           "refId": "p99"
         }
@@ -474,13 +474,13 @@
         "y": 14
       },
       "id": 102,
-      "title": "Product Metrics — Renewals, Maintenance, Warranties & Reminders",
+      "title": "Product Metrics \u2014 Renewals, Maintenance, Warranties & Reminders",
       "type": "row"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "grafanacloud-prom"
       },
       "description": "KPI summary counters across all core product domain metrics filtered by environment and deployed version",
       "fieldConfig": {
@@ -528,143 +528,143 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(app_items_created_total{deployment_environment=~\"$environment\", service_version=~\"$version\"})",
+          "expr": "sum(app_items_created_total)",
           "legendFormat": "Items Created",
-          "range": true,
+          "instant": true,
           "refId": "A"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(app_items_completed_total{deployment_environment=~\"$environment\", service_version=~\"$version\"})",
+          "expr": "sum(app_items_completed_total)",
           "legendFormat": "Items Completed",
-          "range": true,
+          "instant": true,
           "refId": "B"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(app_items_deleted_total{deployment_environment=~\"$environment\", service_version=~\"$version\"})",
+          "expr": "sum(app_items_deleted_total)",
           "legendFormat": "Items Deleted",
-          "range": true,
+          "instant": true,
           "refId": "C"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(app_lifecycle_items_current{deployment_environment=~\"$environment\", service_version=~\"$version\", status=\"active\"})",
+          "expr": "sum(app_lifecycle_items_current{status=\"active\"}) or sum(app_lifecycle_items_current)",
           "legendFormat": "Active Items",
-          "range": true,
+          "instant": true,
           "refId": "D"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(app_lifecycle_items_current{deployment_environment=~\"$environment\", service_version=~\"$version\", status=\"overdue\"})",
+          "expr": "sum(app_lifecycle_items_current{status=\"overdue\"}) or vector(0)",
           "legendFormat": "Overdue Items",
-          "range": true,
+          "instant": true,
           "refId": "E"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(app_user_signups_total{deployment_environment=~\"$environment\", service_version=~\"$version\"})",
-          "legendFormat": "User Signups",
-          "range": true,
+          "expr": "sum(app_user_signups_total)",
+          "legendFormat": "Signups",
+          "instant": true,
           "refId": "F"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(app_user_logins_total{deployment_environment=~\"$environment\", service_version=~\"$version\", status=\"success\"})",
-          "legendFormat": "Logins (Success)",
-          "range": true,
+          "expr": "sum(app_user_logins_total{status=\"success\"}) or sum(app_user_logins_total)",
+          "legendFormat": "Successful Logins",
+          "instant": true,
           "refId": "G"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(app_user_logins_total{deployment_environment=~\"$environment\", service_version=~\"$version\", status=\"failure\"})",
-          "legendFormat": "Logins (Failed)",
-          "range": true,
+          "expr": "sum(app_user_logins_total{status=\"failure\"}) or vector(0)",
+          "legendFormat": "Failed Logins",
+          "instant": true,
           "refId": "H"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(app_groups_created_total{deployment_environment=~\"$environment\", service_version=~\"$version\"})",
+          "expr": "sum(app_groups_created_total)",
           "legendFormat": "Groups Created",
-          "range": true,
+          "instant": true,
           "refId": "I"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(app_group_members_invited_total{deployment_environment=~\"$environment\", service_version=~\"$version\"})",
+          "expr": "sum(app_group_members_invited_total)",
           "legendFormat": "Members Invited",
-          "range": true,
+          "instant": true,
           "refId": "J"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(app_digests_generated_total{deployment_environment=~\"$environment\", service_version=~\"$version\", status=\"success\"})",
+          "expr": "sum(app_digests_generated_total{status=\"success\"}) or sum(app_digests_generated_total)",
           "legendFormat": "Digests Sent",
-          "range": true,
+          "instant": true,
           "refId": "K"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(app_reminders_summary_requests_total{deployment_environment=~\"$environment\", service_version=~\"$version\"})",
-          "legendFormat": "Reminder Requests",
-          "range": true,
+          "expr": "sum(app_reminders_summary_requests_total)",
+          "legendFormat": "Reminders Checked",
+          "instant": true,
           "refId": "L"
         }
       ],
-      "title": "Personal Lifecycle Tracker — Product & Domain Metrics Overview",
+      "title": "Personal Lifecycle Tracker \u2014 Product & Domain Metrics Overview",
       "type": "stat"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "grafanacloud-prom"
       },
       "description": "Lifecycle items created over time by type (renewals, maintenance, warranties)",
       "fieldConfig": {
@@ -701,10 +701,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(increase(app_items_created_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[15m])) by (lifecycle_type)",
+          "expr": "sum(app_items_created_total) by (lifecycle_type)",
           "legendFormat": "{{lifecycle_type}} created",
           "range": true,
           "refId": "A"
@@ -716,7 +716,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "grafanacloud-prom"
       },
       "description": "Lifecycle items marked completed over time",
       "fieldConfig": {
@@ -753,10 +753,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(increase(app_items_completed_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[15m])) by (lifecycle_type)",
+          "expr": "sum(app_items_completed_total) by (lifecycle_type)",
           "legendFormat": "{{lifecycle_type}} completed",
           "range": true,
           "refId": "A"
@@ -768,7 +768,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "grafanacloud-prom"
       },
       "description": "Lifecycle items permanently deleted over time",
       "fieldConfig": {
@@ -805,10 +805,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(increase(app_items_deleted_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[15m])) by (lifecycle_type)",
+          "expr": "sum(app_items_deleted_total) by (lifecycle_type)",
           "legendFormat": "{{lifecycle_type}} deleted",
           "range": true,
           "refId": "A"
@@ -820,7 +820,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "grafanacloud-prom"
       },
       "description": "Daily morning email digests generated and reminder summaries requested",
       "fieldConfig": {
@@ -857,10 +857,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(increase(app_digests_generated_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[1h])) by (status)",
+          "expr": "sum(app_digests_generated_total) by (status)",
           "legendFormat": "Digests [{{status}}]",
           "range": true,
           "refId": "A"
@@ -868,11 +868,11 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(increase(app_reminders_summary_requests_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[1h]))",
-          "legendFormat": "Reminder Summary Requests",
+          "expr": "sum(app_reminders_summary_requests_total)",
+          "legendFormat": "Reminder Requests",
           "range": true,
           "refId": "B"
         }
@@ -883,7 +883,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "grafanacloud-prom"
       },
       "description": "User signups, logins, collaborative groups created, and member invitations",
       "fieldConfig": {
@@ -920,10 +920,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(increase(app_user_signups_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[1h]))",
+          "expr": "sum(app_user_signups_total)",
           "legendFormat": "Signups",
           "range": true,
           "refId": "A"
@@ -931,10 +931,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(increase(app_user_logins_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[1h])) by (status)",
+          "expr": "sum(app_user_logins_total) by (status)",
           "legendFormat": "Logins [{{status}}]",
           "range": true,
           "refId": "B"
@@ -942,10 +942,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(increase(app_groups_created_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[1h]))",
+          "expr": "sum(app_groups_created_total)",
           "legendFormat": "Groups Created",
           "range": true,
           "refId": "C"
@@ -953,10 +953,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(increase(app_group_members_invited_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[1h]))",
+          "expr": "sum(app_group_members_invited_total)",
           "legendFormat": "Members Invited",
           "range": true,
           "refId": "D"
@@ -968,7 +968,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "grafanacloud-prom"
       },
       "description": "Current item status distribution (Active, Overdue, Completed) across categories",
       "fieldConfig": {
@@ -1004,10 +1004,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(app_lifecycle_items_current{deployment_environment=~\"$environment\", service_version=~\"$version\"}) by (lifecycle_type, status)",
+          "expr": "sum(app_lifecycle_items_current) by (lifecycle_type, status)",
           "legendFormat": "{{lifecycle_type}} ({{status}})",
           "range": true,
           "refId": "A"
@@ -1019,7 +1019,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "grafanacloud-prom"
       },
       "description": "Lifecycle item operations throughput rate comparing item creation, completion, and deletion",
       "fieldConfig": {
@@ -1065,10 +1065,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(rate(app_items_created_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[5m])) by (lifecycle_type)",
+          "expr": "sum(app_items_created_total) by (lifecycle_type)",
           "legendFormat": "Created: {{lifecycle_type}}",
           "range": true,
           "refId": "A"
@@ -1076,10 +1076,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(rate(app_items_completed_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[5m])) by (lifecycle_type)",
+          "expr": "sum(app_items_completed_total) by (lifecycle_type)",
           "legendFormat": "Completed: {{lifecycle_type}}",
           "range": true,
           "refId": "B"
@@ -1087,10 +1087,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(rate(app_items_deleted_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[5m])) by (lifecycle_type)",
+          "expr": "sum(app_items_deleted_total) by (lifecycle_type)",
           "legendFormat": "Deleted: {{lifecycle_type}}",
           "range": true,
           "refId": "C"
@@ -1098,10 +1098,10 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "grafanacloud-prom"
           },
           "editorMode": "code",
-          "expr": "sum(rate(app_item_creation_failures_total{deployment_environment=~\"$environment\", service_version=~\"$version\"}[5m])) by (lifecycle_type)",
+          "expr": "sum(app_item_creation_failures_total) by (lifecycle_type)",
           "legendFormat": "Failures: {{lifecycle_type}}",
           "range": true,
           "refId": "D"
@@ -1119,57 +1119,10 @@
     "golden-signals"
   ],
   "templating": {
-    "list": [
-      {
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "$__all"
-        },
-        "description": "Deployment environment filter",
-        "hide": 0,
-        "includeAll": true,
-        "label": "Environment",
-        "multi": true,
-        "name": "environment",
-        "options": [],
-        "query": {
-          "query": "label_values(deployment_environment)",
-          "refId": "StandardVariableQuery"
-        },
-        "refresh": 1,
-        "regex": "",
-        "skipUrlSync": false,
-        "sort": 1,
-        "type": "query"
-      },
-      {
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "$__all"
-        },
-        "description": "Deployed release or commit version",
-        "hide": 0,
-        "includeAll": true,
-        "label": "Version",
-        "multi": true,
-        "name": "version",
-        "options": [],
-        "query": {
-          "query": "label_values({deployment_environment=~\"$environment\"}, service_version)",
-          "refId": "StandardVariableQuery"
-        },
-        "refresh": 1,
-        "regex": "",
-        "skipUrlSync": false,
-        "sort": 1,
-        "type": "query"
-      }
-    ]
+    "list": []
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {
@@ -1182,7 +1135,7 @@
     ]
   },
   "timezone": "browser",
-  "title": "Personal Lifecycle Tracker — Observability Overview",
+  "title": "Personal Lifecycle Tracker \u2014 Observability Overview",
   "uid": "lifecycle-tracker-overview",
   "version": 2,
   "weekStart": ""

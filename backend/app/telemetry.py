@@ -643,7 +643,7 @@ def init_opentelemetry(app: FastAPI) -> None:
 
 UUID_REGEX = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 
-EXCLUDED_PATHS = {"/health", "/healthz", "/metrics", "/favicon.ico", "/docs", "/redoc", "/openapi.json"}
+EXCLUDED_PATHS = {"/metrics", "/favicon.ico"}
 
 
 def normalize_scope_path(scope: dict) -> str:
