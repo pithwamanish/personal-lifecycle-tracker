@@ -84,7 +84,7 @@ class GrafanaClient:
         }
         return self._request("POST", "/api/datasources", create_payload)
 
-    def import_dashboard(self, dashboard_path: str = DASHBOARD_FILE) -> Dict[str, Any]:
+    def import_dashboard(self, dashboard_path: str = DASHBOARD_FILE, ds_uid: Optional[str] = None) -> Dict[str, Any]:
         """Import the production Lifecycle Tracker Overview dashboard."""
         if not os.path.exists(dashboard_path):
             raise FileNotFoundError(f"Dashboard file not found: {dashboard_path}")
@@ -94,7 +94,12 @@ class GrafanaClient:
 
         # Remove id for new import
         dashboard_json["id"] = None
-        dashboard_json["uid"] = dashboard_json.get("uid", "personal-lifecycle-overview")
+        dashboard_json["uid"] = "lifecycle-tracker-overview"
+
+        if ds_uid:
+            dashboard_str = json.dumps(dashboard_json)
+            dashboard_str = dashboard_str.replace('"uid": "prometheus"', f'"uid": "{ds_uid}"')
+            dashboard_json = json.loads(dashboard_str)
 
         payload = {
             "dashboard": dashboard_json,
@@ -149,12 +154,14 @@ def main():
         print(f"[!] Note: Org fetch: {e}")
 
     # 1. Setup Datasource
-    ds_res = client.ensure_datasource()
-    print(f"[+] Prometheus Datasource configured successfully.")
+    client.ensure_datasource()
+    ds_info = client._request("GET", "/api/datasources/name/AWS-CloudFront-Prometheus")
+    ds_uid = ds_info.get("uid")
+    print(f"[+] Prometheus Datasource configured successfully (UID={ds_uid}).")
 
     # 2. Import Dashboard
-    dash_res = client.import_dashboard()
-    dash_url = dash_res.get("url", "/d/personal-lifecycle-overview")
+    dash_res = client.import_dashboard(ds_uid=ds_uid)
+    dash_url = dash_res.get("url", "/d/lifecycle-tracker-overview")
     full_dash_url = f"{client.base_url}{dash_url}"
     print(f"[+] Dashboard imported successfully!")
     print(f"    👉 Live Dashboard URL: {full_dash_url}")
