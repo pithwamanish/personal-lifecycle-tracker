@@ -240,6 +240,15 @@ Resources:
           exec > >(tee -a /var/log/app-bootstrap.log) 2>&1
           echo "=== Provisioning Personal Lifecycle Tracker (${Environment}) via CloudFormation at $(date) ==="
 
+          # Setup 2GB swap space to ensure container builds succeed on t3.micro
+          if [ ! -f /swapfile ]; then
+              fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+              chmod 600 /swapfile
+              mkswap /swapfile
+              swapon /swapfile
+              echo '/swapfile none swap sw 0 0' >> /etc/fstab
+          fi
+
           export DEBIAN_FRONTEND=noninteractive
           apt-get update -y
           apt-get install -y --no-install-recommends ca-certificates curl gnupg git make jq
@@ -301,6 +310,7 @@ Resources:
           Type=oneshot
           RemainAfterExit=yes
           WorkingDirectory=$APP_DIR
+          ExecStartPre=-/usr/bin/docker network create personal-lifecycle-observability-net
           ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml up -d
           ExecStop=/usr/bin/docker compose -f docker-compose.prod.yml down
           TimeoutStartSec=600
@@ -311,6 +321,9 @@ Resources:
 
           systemctl daemon-reload
           systemctl enable personal-lifecycle-tracker.service
+
+          echo "Ensuring observability network exists..."
+          docker network create personal-lifecycle-observability-net 2>/dev/null || true
 
           echo "Pulling images from registry..."
           if docker compose -f docker-compose.prod.yml pull; then
