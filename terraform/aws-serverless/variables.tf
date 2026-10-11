@@ -41,3 +41,16 @@ variable "digest_cron" {
   type        = string
   default     = "cron(0 8 * * ? *)"
 }
+
+variable "otel_exporter_otlp_endpoint" {
+  description = "Optional OTLP endpoint (e.g. Grafana Cloud OTLP HTTP gateway or remote collector)"
+  type        = string
+  default     = ""
+}
+
+variable "otel_exporter_otlp_headers" {
+  description = "Optional OTLP authentication headers (e.g. Authorization=Basic <token>)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

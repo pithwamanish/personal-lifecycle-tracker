@@ -321,9 +321,16 @@ def init_opentelemetry(app: FastAPI) -> None:
 
         # Tracing Setup
         tracer_provider = TracerProvider(resource=resource)
-        traces_endpoint = f"{OTLP_ENDPOINT}/v1/traces"
+        traces_endpoint = f"{OTLP_ENDPOINT}/v1/traces" if not OTLP_ENDPOINT.endswith("/v1/traces") else OTLP_ENDPOINT
         span_exporter = OTLPSpanExporter(endpoint=traces_endpoint)
-        tracer_provider.add_span_processor(BatchSpanProcessor(span_exporter))
+
+        # In AWS Lambda serverless runtime, export spans synchronously to prevent CPU freeze loss
+        is_lambda = bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME") or os.getenv("AWS_EXECUTION_ENV"))
+        if is_lambda:
+            from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+            tracer_provider.add_span_processor(SimpleSpanProcessor(span_exporter))
+        else:
+            tracer_provider.add_span_processor(BatchSpanProcessor(span_exporter))
         otel_trace.set_tracer_provider(tracer_provider)
 
         # Metrics Setup

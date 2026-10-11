@@ -20,6 +20,16 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+resource "aws_iam_role_policy_attachment" "lambda_xray" {
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+}
+
+resource "aws_cloudwatch_log_group" "lambda_logs" {
+  name              = "/aws/lambda/${var.project_name}-api-${var.environment}"
+  retention_in_days = 14 # 14-day retention keeps log storage 100% within free tier (5 GB/mo)
+}
+
 resource "aws_lambda_function" "backend" {
   function_name = "${var.project_name}-api-${var.environment}"
   role          = aws_iam_role.lambda_exec.arn
@@ -28,20 +38,28 @@ resource "aws_lambda_function" "backend" {
   memory_size   = 512
   timeout       = 60
 
+  tracing_config {
+    mode = "Active"
+  }
+
   environment {
     variables = {
-      DATABASE_URL        = var.database_url
-      SECRET_KEY          = var.secret_key
-      APP_ENV             = var.environment
-      PORT                = "8000"
-      PYTHONUNBUFFERED    = "1"
-      AWS_LWA_INVOKE_MODE = "response_stream"
+      DATABASE_URL                = var.database_url
+      SECRET_KEY                  = var.secret_key
+      APP_ENV                     = var.environment
+      PORT                        = "8000"
+      PYTHONUNBUFFERED            = "1"
+      AWS_LWA_INVOKE_MODE         = "response_stream"
+      OTEL_EXPORTER_OTLP_ENDPOINT = var.otel_exporter_otlp_endpoint
+      OTEL_EXPORTER_OTLP_HEADERS  = var.otel_exporter_otlp_headers
     }
   }
 
   lifecycle {
     ignore_changes = [image_uri]
   }
+
+  depends_on = [aws_cloudwatch_log_group.lambda_logs]
 }
 
 resource "aws_lambda_function_url" "backend_url" {
