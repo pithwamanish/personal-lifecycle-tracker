@@ -19,3 +19,8 @@ warmer_rate = "rate(4 minutes)"
 
 # Daily Morning Email Digest (Triggers daily at 08:00 AM UTC)
 digest_cron = "cron(0 8 * * ? *)"
+
+# Grafana Cloud OpenTelemetry (OTLP) Configuration (Optional - $0 Free Tier)
+# Get your endpoint and token from https://grafana.com
+otel_exporter_otlp_endpoint = ""
+otel_exporter_otlp_headers  = ""

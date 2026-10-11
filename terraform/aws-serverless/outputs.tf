@@ -22,3 +22,8 @@ output "s3_bucket_name" {
   description = "Frontend S3 bucket for static builds"
   value       = aws_s3_bucket.frontend.bucket
 }
+
+output "prometheus_metrics_url" {
+  description = "Live Prometheus metrics scraping endpoint for Grafana / CloudWatch"
+  value       = "https://${aws_cloudfront_distribution.cdn.domain_name}/metrics"
+}
