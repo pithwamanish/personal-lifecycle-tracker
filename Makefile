@@ -157,6 +157,15 @@ tf-init-serverless:
 tf-validate-serverless:
 	docker run --rm -v $(CURDIR)/terraform/aws-serverless:/workspace -w /workspace $(TF_IMAGE) validate
 
+tf-plan-serverless:
+	docker run --rm -v $(CURDIR)/terraform/aws-serverless:/workspace -w /workspace -v $$HOME/.aws:/root/.aws:ro -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_DEFAULT_REGION -e AWS_PROFILE $(TF_IMAGE) plan
+
+tf-apply-serverless:
+	docker run --rm -it -v $(CURDIR)/terraform/aws-serverless:/workspace -w /workspace -v $$HOME/.aws:/root/.aws:ro -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_DEFAULT_REGION -e AWS_PROFILE $(TF_IMAGE) apply
+
+deploy-serverless:
+	bash terraform/aws-serverless/deploy.sh
+
 # Validate All Terraform Environments
 tf-validate: tf-validate-aws tf-validate-aws-prod tf-validate-render tf-validate-render-prod tf-validate-serverless
 

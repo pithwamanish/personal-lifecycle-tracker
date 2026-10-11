@@ -107,7 +107,7 @@ resource "aws_cloudfront_distribution" "cdn" {
 
     forwarded_values {
       query_string = true
-      headers      = ["*"]
+      headers      = ["Accept", "Accept-Language", "Authorization", "Content-Type", "Origin", "Referer", "User-Agent"]
       cookies {
         forward = "all"
       }
@@ -128,6 +128,91 @@ resource "aws_cloudfront_distribution" "cdn" {
 
     forwarded_values {
       query_string = false
+      headers      = ["Accept", "Accept-Language", "Authorization", "Content-Type", "Origin", "Referer", "User-Agent"]
+      cookies {
+        forward = "none"
+      }
+    }
+
+    min_ttl     = 0
+    default_ttl = 0
+    max_ttl     = 0
+  }
+
+  # Swagger UI docs route: forward to Lambda
+  ordered_cache_behavior {
+    path_pattern           = "/docs*"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "LambdaOrigin"
+    viewer_protocol_policy = "redirect-to-https"
+
+    forwarded_values {
+      query_string = true
+      headers      = ["Accept", "Accept-Language", "Authorization", "Content-Type", "Origin", "Referer", "User-Agent"]
+      cookies {
+        forward = "none"
+      }
+    }
+
+    min_ttl     = 0
+    default_ttl = 0
+    max_ttl     = 0
+  }
+
+  # ReDoc UI route: forward to Lambda
+  ordered_cache_behavior {
+    path_pattern           = "/redoc*"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "LambdaOrigin"
+    viewer_protocol_policy = "redirect-to-https"
+
+    forwarded_values {
+      query_string = true
+      headers      = ["Accept", "Accept-Language", "Authorization", "Content-Type", "Origin", "Referer", "User-Agent"]
+      cookies {
+        forward = "none"
+      }
+    }
+
+    min_ttl     = 0
+    default_ttl = 0
+    max_ttl     = 0
+  }
+
+  # OpenAPI schema route: forward to Lambda
+  ordered_cache_behavior {
+    path_pattern           = "/openapi.json"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "LambdaOrigin"
+    viewer_protocol_policy = "redirect-to-https"
+
+    forwarded_values {
+      query_string = false
+      headers      = ["Accept", "Accept-Language", "Authorization", "Content-Type", "Origin", "Referer", "User-Agent"]
+      cookies {
+        forward = "none"
+      }
+    }
+
+    min_ttl     = 0
+    default_ttl = 0
+    max_ttl     = 0
+  }
+
+  # Prometheus metrics route: forward to Lambda
+  ordered_cache_behavior {
+    path_pattern           = "/metrics"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "LambdaOrigin"
+    viewer_protocol_policy = "redirect-to-https"
+
+    forwarded_values {
+      query_string = false
+      headers      = ["Accept", "Accept-Language", "Authorization", "Content-Type", "Origin", "Referer", "User-Agent"]
       cookies {
         forward = "none"
       }
