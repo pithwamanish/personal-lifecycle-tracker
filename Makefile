@@ -178,6 +178,41 @@ cf-validate-prod:
 
 cf-validate: cf-validate-dev cf-validate-prod
 
+# CloudFormation Deploy & Lifecycle Targets
+CF_STACK_DEV ?= personal-lifecycle-tracker-dev
+CF_STACK_PROD ?= personal-lifecycle-tracker-prod
+AWS_DEFAULT_REGION ?= us-east-1
+
+cf-deploy-dev:
+	docker run --rm -v $(CURDIR)/cloudformation:/cf -v $$HOME/.aws:/root/.aws:ro \
+	  -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION) \
+	  $(AWS_CLI_IMAGE) cloudformation create-stack \
+	    --stack-name $(CF_STACK_DEV) \
+	    --template-body file:///cf/aws-ec2-compose.yaml \
+	    --parameters ParameterKey=Environment,ParameterValue=dev ParameterKey=AppPort,ParameterValue=80 \
+	    --capabilities CAPABILITY_NAMED_IAM \
+	    --region $(AWS_DEFAULT_REGION)
+
+cf-deploy-prod:
+	docker run --rm -v $(CURDIR)/cloudformation:/cf -v $$HOME/.aws:/root/.aws:ro \
+	  -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION) \
+	  $(AWS_CLI_IMAGE) cloudformation create-stack \
+	    --stack-name $(CF_STACK_PROD) \
+	    --template-body file:///cf/aws-ec2-compose-prod.yaml \
+	    --parameters ParameterKey=Environment,ParameterValue=production ParameterKey=AppPort,ParameterValue=80 \
+	    --capabilities CAPABILITY_NAMED_IAM \
+	    --region $(AWS_DEFAULT_REGION)
+
+cf-status-dev:
+	docker run --rm -v $$HOME/.aws:/root/.aws:ro \
+	  -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION) \
+	  $(AWS_CLI_IMAGE) cloudformation describe-stacks --stack-name $(CF_STACK_DEV) --region $(AWS_DEFAULT_REGION)
+
+cf-status-prod:
+	docker run --rm -v $$HOME/.aws:/root/.aws:ro \
+	  -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION) \
+	  $(AWS_CLI_IMAGE) cloudformation describe-stacks --stack-name $(CF_STACK_PROD) --region $(AWS_DEFAULT_REGION)
+
 ci-validate:
 	act -n -W .github/workflows/ci.yml
 
