@@ -80,4 +80,4 @@ networks:
   default:
   observability-net:
     name: ${OBSERVABILITY_NET:-personal-lifecycle-observability-net}
-    external: true
+
