@@ -8,6 +8,7 @@ test.describe('Groups & Shared Access Flow (@spec.md Decision 4, 13, 14, 18, 30)
 
   test('should display existing groups and allow creating a new group', async ({ page }) => {
     await page.goto('/');
+    await expect(page.locator('text=Lifecycle Tracker')).toBeVisible();
 
     // Navigate to Groups tab
     await page.getByRole('button', { name: 'Groups' }).click();
@@ -30,6 +31,7 @@ test.describe('Groups & Shared Access Flow (@spec.md Decision 4, 13, 14, 18, 30)
 
   test('should invite a new member by email to a group', async ({ page }) => {
     await page.goto('/');
+    await expect(page.locator('text=Lifecycle Tracker')).toBeVisible();
 
     await page.getByRole('button', { name: 'Groups' }).click();
 
@@ -48,6 +50,7 @@ test.describe('Groups & Shared Access Flow (@spec.md Decision 4, 13, 14, 18, 30)
 
   test('should remove a member from a group', async ({ page }) => {
     await page.goto('/');
+    await expect(page.locator('text=Lifecycle Tracker')).toBeVisible();
 
     await page.getByRole('button', { name: 'Groups' }).click();
 
@@ -64,6 +67,7 @@ test.describe('Groups & Shared Access Flow (@spec.md Decision 4, 13, 14, 18, 30)
 
   test('should delete group and all associated items permanently (Decision 30)', async ({ page }) => {
     await page.goto('/');
+    await expect(page.locator('text=Lifecycle Tracker')).toBeVisible();
 
     await page.getByRole('button', { name: 'Groups' }).click();
 

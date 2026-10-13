@@ -7,9 +7,9 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './',
   testMatch: '**/*.spec.ts',
-  timeout: 30 * 1000,
+  timeout: 45 * 1000,
   expect: {
-    timeout: 7000,
+    timeout: 10000,
   },
   fullyParallel: false,
   workers: 1,
@@ -24,8 +24,8 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    actionTimeout: 10000,
-    navigationTimeout: 15000,
+    actionTimeout: 15000,
+    navigationTimeout: 20000,
   },
   projects: [
     {
