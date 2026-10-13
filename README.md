@@ -251,6 +251,16 @@ We maintain two independent copies of our infrastructure across **Render** and *
 | **AWS (Terraform)** | [`terraform/aws/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/aws/) (`10.1.0.0/16`) | [`terraform/aws-prod/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/aws-prod/) (`10.0.0.0/16`) | EC2 (`t3.micro`/Free Tier) + Elastic IP + SSM |
 | **AWS (CloudFormation)**| [`cloudformation/aws-ec2-compose.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose.yaml) | [`cloudformation/aws-ec2-compose-prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose-prod.yaml) | 1-Click AWS Stack (VPC, Subnet, SG, EC2, EIP, SSM) |
 
+### Live Cloud Deployments & Endpoints (Proof of Deployment)
+
+The system is deployed and verifiable via the following public endpoints and automated health checks:
+- **Production Web Application**: [https://personal-lifecycle-frontend-prod.onrender.com](https://personal-lifecycle-frontend-prod.onrender.com)
+  - **Production Live Health Endpoint**: [https://personal-lifecycle-frontend-prod.onrender.com/health](https://personal-lifecycle-frontend-prod.onrender.com/health) (Status 200, verifies DB & reverse proxy)
+  - **Production API ReDoc**: [https://personal-lifecycle-backend-prod.onrender.com/redoc](https://personal-lifecycle-backend-prod.onrender.com/redoc)
+- **Development Web Application**: [https://personal-lifecycle-frontend-dev.onrender.com](https://personal-lifecycle-frontend-dev.onrender.com)
+  - **Development Live Health Endpoint**: [https://personal-lifecycle-frontend-dev.onrender.com/health](https://personal-lifecycle-frontend-dev.onrender.com/health)
+- **Deployment Guides & IaC Documentation**: [`docs/deployment/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/) (Render Blueprint, Render Terraform, AWS Terraform, AWS CloudFormation).
+
 ```bash
 # Validate ALL Terraform environments simultaneously (Dockerized)
 make tf-validate

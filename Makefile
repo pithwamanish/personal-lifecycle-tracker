@@ -21,7 +21,7 @@ test-frontend:
 	docker compose run --rm frontend npm test
 
 test-e2e:
-	docker compose run --rm e2e
+	docker compose run --rm -T e2e
 
 lint:
 	docker compose run --rm frontend npm run lint
