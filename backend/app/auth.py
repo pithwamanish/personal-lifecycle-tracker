@@ -56,20 +56,9 @@ def decode_access_token(token: str) -> Optional[dict]:
         return None
 
 
-def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Security(security),
-) -> User:
-    """
-    Enforces Bearer authentication strictly. Used for /auth/me and protected routes.
-    """
-    if not credentials or not credentials.credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    payload = decode_access_token(credentials.credentials)
+def _resolve_user_from_token(token: str) -> User:
+    """Decode JWT token and retrieve corresponding user from database store."""
+    payload = decode_access_token(token)
     if not payload or "sub" not in payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -80,8 +69,7 @@ def get_current_user(
     from app.store import get_store
     store = get_store()
 
-    user_id = payload["sub"]
-    user_in_db = store.get_user_by_id(user_id)
+    user_in_db = store.get_user_by_id(payload["sub"])
     if not user_in_db:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -97,6 +85,21 @@ def get_current_user(
     )
 
 
+def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Security(security),
+) -> User:
+    """
+    Enforces Bearer authentication strictly. Used for /auth/me and protected routes.
+    """
+    if not credentials or not credentials.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return _resolve_user_from_token(credentials.credentials)
+
+
 def get_current_user_optional(
     credentials: Optional[HTTPAuthorizationCredentials] = Security(security),
 ) -> User:
@@ -105,35 +108,15 @@ def get_current_user_optional(
     If no token is supplied, falls back to the default seed user for dev/demo simplicity.
     If an invalid token is provided, raises 401.
     """
-    from app.store import get_store
-    store = get_store()
-
     if credentials and credentials.credentials:
-        payload = decode_access_token(credentials.credentials)
-        if not payload or "sub" not in payload:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired token",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        user_in_db = store.get_user_by_id(payload["sub"])
-        if not user_in_db:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        return User(
-            id=user_in_db.id,
-            email=user_in_db.email,
-            name=user_in_db.name,
-            createdAt=user_in_db.createdAt,
-        )
+        return _resolve_user_from_token(credentials.credentials)
 
-    default_user = store.get_default_user()
+    from app.store import get_store
+    default_user = get_store().get_default_user()
     return User(
         id=default_user.id,
         email=default_user.email,
         name=default_user.name,
         createdAt=default_user.createdAt,
     )
+

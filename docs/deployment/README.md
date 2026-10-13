@@ -10,7 +10,7 @@ This directory contains the Infrastructure as Code (IaC) templates, configuratio
 
 | Capability / Resource | Development Environment (`dev`) | Production Environment (`production`) |
 |---|---|---|
-| **Render Blueprint** | [`render.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.yaml) | [`render.prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.prod.yaml) / [`render-prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render-prod.yaml) |
+| **Render Blueprint** | [`render.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.yaml) | [`render.prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.prod.yaml) |
 | **Render Services** | `personal-lifecycle-*-dev` | `personal-lifecycle-*-prod` |
 | **Render Plan** | Free tier (`free`) | Starter tier (`starter`) |
 | **Render Terraform** | [`terraform/render/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/render/) (`default = "dev"`) | [`terraform/render-prod/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/render-prod/) (`default = "production"`) |
@@ -74,7 +74,6 @@ make prod-down
 .
 ├── render.yaml                             # Render Blueprint (Dev Environment)
 ├── render.prod.yaml                        # Render Blueprint (Production Environment Copy)
-├── render-prod.yaml                        # Alias for production blueprint
 ├── cloudformation/
 │   ├── aws-ec2-compose.yaml                # AWS CloudFormation (Dev Environment: 10.1.0.0/16)
 │   └── aws-ec2-compose-prod.yaml           # AWS CloudFormation (Production Copy: 10.0.0.0/16)

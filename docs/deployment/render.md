@@ -37,7 +37,7 @@ To deploy the **dev** environment:
 ### 2. Production Environment Copy (`render.prod.yaml`)
 To deploy the independent **production** environment:
 1. In the Render Dashboard, create a new Blueprint instance.
-2. Point the Blueprint configuration to [`render.prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.prod.yaml) (or [`render-prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render-prod.yaml)).
+2. Point the Blueprint configuration to [`render.prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.prod.yaml).
 3. Provisions:
    - `personal-lifecycle-db-prod` (Database: `lifecycle`, Plan: `starter`)
    - `personal-lifecycle-backend-prod` (FastAPI Web Service, Plan: `starter`)

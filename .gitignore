@@ -9,6 +9,9 @@ coverage/
 *.db
 *.sqlite
 *.sqlite3
+*.pyc
+*.pyo
+*.pyd
 __pycache__/
 .pytest_cache/
 playwright-report/

@@ -67,10 +67,8 @@ A decoupled, production-grade observability stack containing **OpenTelemetry Col
 ```
 observability/
 ├── docker-compose.yaml                 # Standalone Compose project definition
-├── compose.yaml                        # Standard compose symlink
 ├── .env.example                        # Configurable port & container name overrides
 ├── otel-collector-config.yaml          # Collector pipelines routing traces, metrics & logs
-├── otel-config.yaml                    # Collector config symlink
 ├── prometheus.yml                      # Prometheus scrape targets
 ├── loki-config.yaml                    # Loki filesystem & TSDB config
 ├── tempo-config.yaml                   # Tempo local trace storage & OTLP ingestion

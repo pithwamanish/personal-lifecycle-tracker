@@ -277,7 +277,6 @@ VITE_BACKEND_URL=http://backend:8000
 │   └── aws-ec2-compose-prod.yaml # AWS CloudFormation (Production Copy: 10.0.0.0/16)
 ├── render.yaml                # Render Blueprint (Dev Environment)
 ├── render.prod.yaml           # Render Blueprint (Production Environment Copy)
-├── render-prod.yaml           # Alias for production blueprint
 ├── terraform/
 │   ├── aws/                   # AWS Terraform (Dev Environment: 10.1.0.0/16)
 │   │   ├── versions.tf

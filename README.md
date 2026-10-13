@@ -69,7 +69,7 @@ Full specification is frozen in [`product-spec.md`](file:///home/manish/AI-Pract
 - **Reverse Proxy & Web Server**: Caddy 2 with automated gzip/zstd, security headers, and single-port reverse proxying.
 - **Database**: PostgreSQL 16 (production and Docker Compose) with local SQLite fallback.
 - **API Contract**: Frozen OpenAPI 3.0.3 specification in [`contracts/openapi.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/contracts/openapi.yaml) and [`openapi.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/openapi.yaml).
-- **Containerization**: Multi-service Docker Compose (`docker-compose.yaml` and alias `docker-compose.yml`).
+- **Containerization**: Multi-service Docker Compose (`docker-compose.yaml`).
 - **Kubernetes**: Local declarative Kubernetes manifests in `k8s/` for [Kind](https://kind.sigs.k8s.io/).
 - **Observability**: OpenTelemetry distributed tracing, Prometheus metrics, Loki logs, Tempo traces, Grafana dashboards (`observability/`).
 
@@ -327,7 +327,7 @@ Comprehensive security audits and hardening artifacts under [`security/`](file:/
 | **5** | **API Contract** (2 pts) | OpenAPI reflects frontend requirements, used as contract | `2/2` | [`contracts/openapi.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/contracts/openapi.yaml), [`openapi.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/openapi.yaml) |
 | **6** | **Backend Implementation** (3 pts) | Well structured, follows OpenAPI, unit & integration tests | `3/3` | `backend/app/`, `make test-backend`, `make test-integration` |
 | **7** | **Database Integration** (2 pts) | PostgreSQL integrated, multi-environment support (dev/prod) | `2/2` | `backend/app/database.py`, `backend/app/db_models.py` |
-| **8** | **Containerization** (2 pts) | Full system runs via Docker Compose with clear docs | `2/2` | `docker-compose.yaml`, `docker-compose.yml`, `make up` |
+| **8** | **Containerization** (2 pts) | Full system runs via Docker Compose with clear docs | `2/2` | `docker-compose.yaml`, `make up` |
 | **9** | **Integration Testing** (2 pts) | Separated integration tests covering key workflows | `2/2` | `backend/tests/integration/` (27 tests), `e2e/` (17 tests) |
 | **10**| **Deployment** (2 pts) | Deployed to cloud with proof of deployment / IaC | `2/2` | Render & AWS Terraform, CloudFormation, Section 10 |
 | **11**| **CI/CD Pipeline** (2 pts) | Automated tests, two-stage ECR, dev/prod promotion | `2/2` | `.github/workflows/ci.yml`, `promote-dev-to-prod.yml` |
