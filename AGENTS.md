@@ -1,6 +1,7 @@
 # Personal Lifecycle Tracker — Agent Instructions & Operating Guide
 
 Welcome to the **Personal Lifecycle Tracker** repository. This project manages Renewals, Maintenance, and Warranties for independent users and shared groups, including action summaries, in-app notifications, and scheduled daily morning email digests.
+It is governed by the AI-Native Meta-Environment (`meta-environment`) capability framework and strict zero-host-runtime container standards.
 
 ---
 

@@ -1,7 +1,7 @@
 # Agent Extension Pack Conformance & Evaluation Report
 
 **Project**: `.`  
-**Evaluation Date**: 2026-10-10 23:50:45  
+**Evaluation Date**: 2026-10-13 15:05:32  
 **Overall Conformance Score**: **100%**  
 **Verdict**: **COMPLIANT**  
 **Standards Evaluated**: Agent Plugins Open Standard 1.0/1.1 (`agent-plugins.org` / AAIF / TSC: Amazon, Cursor, Google, Microsoft, OpenAI, Vercel), Zoomcamp Module 5 Standard (`05-agent-capabilities/README.md`), AWS Agent Plugins, Project Spec Alignment
@@ -68,7 +68,7 @@ This automated assessment verifies, evaluates, and confirms whether the project'
 | PASS | All client extension paths in plugin.json resolve to existing files | - |
 | PASS | MCP manifest present (mcp.json) | - |
 | PASS | mcp.json contains valid JSON syntax | - |
-| PASS | mcp.json declares 1 active MCP server(s) | - |
+| PASS | mcp.json declares 2 active MCP server(s) | - |
 | PASS | All MCP servers explicitly declare valid type (stdio, streamable-http, or sse) | - |
 | PASS | MCP command and cwd paths adhere to filesystem containment within plugin root | - |
 | PASS | No hardcoded credentials detected in mcp.json (credentials managed via environment) | - |
