@@ -20,7 +20,7 @@ export default defineConfig({
     ['html', { open: 'never', outputFolder: 'playwright-report' }],
   ],
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:3003',
+    baseURL: process.env.BASE_URL || process.env.E2E_BASE_URL || 'http://127.0.0.1:3003',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

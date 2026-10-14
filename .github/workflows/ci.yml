@@ -109,16 +109,23 @@ jobs:
 
       - name: Wait for Stack Healthiness
         run: |
-          echo "Waiting for backend health endpoint (http://localhost:8003/health)..."
-          timeout 90s bash -c 'until curl -fsS http://localhost:8003/health > /dev/null 2>&1; do sleep 2; done'
+          echo "Waiting for backend health endpoint (http://127.0.0.1:8003/health)..."
+          timeout 90s bash -c 'until curl -fsS http://127.0.0.1:8003/health > /dev/null 2>&1; do sleep 2; done'
           echo "Backend is healthy!"
-          curl -s http://localhost:8003/health
+          curl -s http://127.0.0.1:8003/health
+
+          echo "Waiting for frontend endpoint (http://127.0.0.1:3003)..."
+          timeout 90s bash -c 'until curl -fsS http://127.0.0.1:3003 > /dev/null 2>&1; do sleep 2; done'
+          echo "Frontend is healthy!"
 
       - name: Run PostgreSQL Integration Tests
         run: |
           docker compose run --rm -T -e INTEGRATION_BACKEND_URL=http://personal-lifecycle-tracker-backend:8000 backend pytest tests/integration -v
 
       - name: Run Playwright End-to-End Tests
+        env:
+          BASE_URL: http://127.0.0.1:3003
+          BACKEND_URL: http://127.0.0.1:8003
         run: |
           docker compose up --exit-code-from e2e e2e
 
@@ -128,6 +135,7 @@ jobs:
           docker compose logs --tail 100 backend
           docker compose logs --tail 100 frontend
           docker compose logs --tail 100 db
+          docker compose logs --tail 100 e2e
 
       - name: Tear Down Compose Stack
         if: always()

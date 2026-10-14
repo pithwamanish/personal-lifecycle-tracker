@@ -4,22 +4,37 @@ export const BACKEND_URL =
   process.env.BACKEND_URL ||
   (process.env.BASE_URL && process.env.BASE_URL.includes('frontend:3000')
     ? 'http://backend:8000'
-    : 'http://localhost:8003');
+    : 'http://127.0.0.1:8003');
 
 /**
  * Reset the database to the default seed state via the dev endpoint.
  */
 export async function resetDatabase(): Promise<void> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/api/v1/dev/seed`, {
-      method: 'POST',
-    });
-    if (!res.ok) {
-      console.warn(`Seed reset returned HTTP ${res.status}`);
+  const candidateUrls = [
+    BACKEND_URL,
+    'http://127.0.0.1:8003',
+    'http://localhost:8003',
+    'http://backend:8000',
+    'http://personal-lifecycle-tracker-backend:8000',
+  ];
+
+  for (const url of candidateUrls) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch(`${url}/api/v1/dev/seed`, {
+        method: 'POST',
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        return;
+      }
+    } catch {
+      // Continue to next candidate URL
     }
-  } catch (err) {
-    console.warn('Could not contact dev seed endpoint:', err);
   }
+  console.warn('Could not contact dev seed endpoint across candidate URLs');
 }
 
 /**
