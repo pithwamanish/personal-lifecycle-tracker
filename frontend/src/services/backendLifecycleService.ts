@@ -35,7 +35,14 @@ export class BackendLifecycleService implements ILifecycleService {
         typeof import.meta !== 'undefined' && import.meta.env
           ? import.meta.env.VITE_API_URL
           : '';
-      this.baseUrl = (envUrl || '').replace(/\/$/, '');
+      let resolvedBase = envUrl || '';
+      if (!resolvedBase && typeof window !== 'undefined' && window.location) {
+        const host = window.location.hostname;
+        if (host.includes('cloudfront.net')) {
+          resolvedBase = 'https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws';
+        }
+      }
+      this.baseUrl = resolvedBase.replace(/\/$/, '');
     }
     this.loadState();
   }

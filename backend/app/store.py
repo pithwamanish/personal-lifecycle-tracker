@@ -141,18 +141,23 @@ class DatabaseStore:
             bind=self.engine,
         )
         self._lock = threading.Lock()
-        # For remote databases like PostgreSQL, wait briefly for connection readiness
-        if is_postgres_url(self.database_url):
-            wait_for_db(self.engine, max_retries=15, delay=0.5)
+        # Avoid expensive WAN schema inspection and table count on every serverless cold start
+        is_lambda = bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME") or os.getenv("AWS_EXECUTION_ENV"))
+        skip_init = (is_lambda or os.getenv("SKIP_DB_INIT") == "1") and os.getenv("FORCE_INIT_DB") != "1"
 
-        # Initialize schema tables
-        init_db(self.engine)
+        if not skip_init:
+            # For remote databases like PostgreSQL, wait briefly for connection readiness
+            if is_postgres_url(self.database_url):
+                wait_for_db(self.engine, max_retries=15, delay=0.5)
 
-        # Auto-seed if database is empty on initialization
-        with self.get_session() as session:
-            user_count = session.query(UserModel).count()
-            if user_count == 0:
-                self.seed()
+            # Initialize schema tables
+            init_db(self.engine)
+
+            # Auto-seed if database is empty on initialization
+            with self.get_session() as session:
+                user_count = session.query(UserModel).count()
+                if user_count == 0:
+                    self.seed()
 
     @contextmanager
     def get_session(self) -> Generator[Session, None, None]:
@@ -522,25 +527,17 @@ class DatabaseStore:
     ) -> List[LifecycleItem]:
         with self.get_session() as session:
             user_email_lower = user.email.lower()
-            # Accessible group IDs
-            accessible_group_ids = [
-                row[0]
-                for row in session.query(GroupMemberModel.group_id)
-                .filter(func.lower(GroupMemberModel.email) == user_email_lower)
-                .all()
-            ]
-
-            # Base accessibility condition:
+            # Single-query accessibility filter:
             # Personal items owned by user OR group items where user is member
-            if accessible_group_ids:
-                accessibility_filter = or_(
-                    and_(LifecycleItemModel.group_id.is_(None), LifecycleItemModel.owner_id == user.id),
-                    LifecycleItemModel.group_id.in_(accessible_group_ids),
-                )
-            else:
-                accessibility_filter = and_(
-                    LifecycleItemModel.group_id.is_(None), LifecycleItemModel.owner_id == user.id
-                )
+            group_subquery = (
+                session.query(GroupMemberModel.group_id)
+                .filter(func.lower(GroupMemberModel.email) == user_email_lower)
+                .scalar_subquery()
+            )
+            accessibility_filter = or_(
+                and_(LifecycleItemModel.group_id.is_(None), LifecycleItemModel.owner_id == user.id),
+                LifecycleItemModel.group_id.in_(group_subquery),
+            )
 
             query = session.query(LifecycleItemModel).filter(accessibility_filter)
 
@@ -786,15 +783,13 @@ class DatabaseStore:
     def get_groups(self, user: User) -> List[Group]:
         with self.get_session() as session:
             user_email_lower = user.email.lower()
-            accessible_group_ids = [
-                row[0]
-                for row in session.query(GroupMemberModel.group_id)
+            groups = (
+                session.query(GroupModel)
+                .join(GroupMemberModel, GroupModel.id == GroupMemberModel.group_id)
                 .filter(func.lower(GroupMemberModel.email) == user_email_lower)
+                .distinct()
                 .all()
-            ]
-            if not accessible_group_ids:
-                return []
-            groups = session.query(GroupModel).filter(GroupModel.id.in_(accessible_group_ids)).all()
+            )
             return [g.to_group() for g in groups]
 
     def get_group_by_id(self, group_id: str) -> Optional[Group]:

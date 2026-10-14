@@ -18,6 +18,54 @@ test('benchmark page load time in browser', async ({ page }) => {
   expect(fullyRenderedTime).toBeLessThan(3000);
 });
 
+test('benchmark page load time on CloudFront directly', async ({ page }) => {
+  const start = Date.now();
+  const reqTimes = new Map<string, number>();
+  page.on('console', msg => console.log(`[Browser Console +${Date.now() - start}ms] ${msg.type()}: ${msg.text()}`));
+  page.on('request', request => {
+    reqTimes.set(request.url(), Date.now());
+    console.log(`[Req Started +${Date.now() - start}ms] ${request.method()} ${request.url()}`);
+  });
+  page.on('response', response => {
+    const reqStart = reqTimes.get(response.url()) || start;
+    console.log(`[Res Finished +${Date.now() - start}ms] (duration: ${Date.now() - reqStart}ms) ${response.url()} -> ${response.status()}`);
+  });
+
+  await page.goto('https://d1ca9upoitnq9b.cloudfront.net/', { waitUntil: 'domcontentloaded' });
+  const domContentLoadedTime = Date.now() - start;
+
+  await expect(page.locator('header').getByText('Alex Taylor')).toBeVisible();
+  const fullyRenderedTime = Date.now() - start;
+
+  console.log(`\n========================================`);
+  console.log(`[CloudFront Direct] DOM Content Loaded Time: ${domContentLoadedTime} ms`);
+  console.log(`[CloudFront Direct] Fully Rendered Page Time: ${fullyRenderedTime} ms (${(fullyRenderedTime / 1000).toFixed(2)}s)`);
+  console.log(`========================================\n`);
+
+  expect(fullyRenderedTime).toBeLessThan(3500);
+});
+
+test('benchmark page load time on CloudFront with authenticated session', async ({ page }) => {
+  const start = Date.now();
+  await page.addInitScript(() => {
+    localStorage.setItem('plt_auth_token_v1', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyX2FsZXgiLCJlbWFpbCI6ImFsZXhAZXhhbXBsZS5jb20iLCJleHAiOjE3OTI1NzA5ODl9.kVuQPUqhiFd3Ea3ijJk9mNWSQmGav4UK6JWm0dz3fok');
+    localStorage.setItem('plt_current_user_id_v1', 'user_alex');
+  });
+
+  await page.goto('https://d1ca9upoitnq9b.cloudfront.net/', { waitUntil: 'domcontentloaded' });
+  const domContentLoadedTime = Date.now() - start;
+
+  await expect(page.locator('header').getByText('Alex Taylor')).toBeVisible();
+  const fullyRenderedTime = Date.now() - start;
+
+  console.log(`\n========================================`);
+  console.log(`[CloudFront Authenticated] DOM Content Loaded Time: ${domContentLoadedTime} ms`);
+  console.log(`[CloudFront Authenticated] Fully Rendered Page Time: ${fullyRenderedTime} ms (${(fullyRenderedTime / 1000).toFixed(2)}s)`);
+  console.log(`========================================\n`);
+
+  expect(fullyRenderedTime).toBeLessThan(3000);
+});
+
 test('benchmark page load time on localhost:3003 in browser', async ({ page }) => {
   const start = Date.now();
 

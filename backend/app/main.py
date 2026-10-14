@@ -72,6 +72,14 @@ def create_app() -> FastAPI:
     app.include_router(reminders.router, prefix="/api/v1/reminders", tags=["reminders"])
     app.include_router(dev.router, prefix="/api/v1/dev", tags=["dev"])
 
+    # Eagerly warm DatabaseStore during container boot
+    try:
+        from app.store import get_store
+        get_store()
+    except Exception as e:
+        # Avoid crashing container boot if database is temporarily unreachable
+        pass
+
     return app
 
 

@@ -18,6 +18,7 @@ import {
   RemindersSummary,
   UpdateItemDTO,
   User,
+  getItemUrgency,
   lifecycleService,
 } from './services';
 
@@ -53,30 +54,64 @@ export default function App() {
   // Refresh all state from centralized services layer
   const refreshData = useCallback(async () => {
     try {
-      const [user, users] = await Promise.all([
-        lifecycleService.getCurrentUser(),
-        lifecycleService.listUsers(),
-      ]);
+      const hasStoredToken =
+        typeof window !== 'undefined' &&
+        Boolean(localStorage.getItem('plt_auth_token_v1'));
+
+      let user: User | null = null;
+      let loadedGroups: Group[] = [];
+      let loadedItems: LifecycleItem[] = [];
+
+      user = await lifecycleService.getCurrentUser();
       setCurrentUser(user);
-      setAllUsers(users);
+      setLoading(false);
 
       if (user) {
-        const [loadedGroups, loadedItems, loadedReminders] =
-          await Promise.all([
-            lifecycleService.getGroups(),
-            lifecycleService.getItems(
-              selectedGroupId === 'ALL'
-                ? undefined
-                : { groupId: selectedGroupId }
-            ),
-            lifecycleService.getRemindersSummary(),
-          ]);
-
-        setGroups(loadedGroups);
+        // Fetch items first so main content renders immediately
+        loadedItems = await lifecycleService.getItems(
+          selectedGroupId === 'ALL'
+            ? undefined
+            : { groupId: selectedGroupId }
+        );
         setItems(loadedItems);
-        setReminders(loadedReminders);
 
-        // Fetch digest settings in background without blocking initial paint
+        if (loadedItems.length > 0) {
+          // Compute initial reminders immediately from loadedItems (instant 0ms)
+          const overdue = loadedItems.filter((i) => getItemUrgency(i) === 'overdue');
+          const upcoming = loadedItems.filter((i) => getItemUrgency(i) === 'upcoming');
+          setReminders({
+            overdue,
+            upcoming,
+            totalActiveReminders: overdue.length + upcoming.length,
+          });
+        }
+
+        // Fetch groups sequentially to reuse the single warm Lambda container without cold start contention
+        loadedGroups = await lifecycleService.getGroups();
+        setGroups(loadedGroups);
+      } else {
+        setGroups([]);
+        setItems([]);
+        setReminders({ overdue: [], upcoming: [], totalActiveReminders: 0 });
+      }
+
+      // Non-blocking background sync:
+      // 1. Fetch exact reminders summary from server (cross-group totals)
+      // 2. Fetch allUsers for auth modal
+      // 3. Fetch digest config and history
+      if (user) {
+        lifecycleService
+          .getRemindersSummary()
+          .then(setReminders)
+          .catch((err) => console.debug('Reminders summary background fetch error:', err));
+      }
+
+      lifecycleService
+        .listUsers()
+        .then(setAllUsers)
+        .catch((err) => console.debug('Users list background fetch error:', err));
+
+      if (user) {
         Promise.all([
           lifecycleService.getDigestConfig(),
           lifecycleService.getDigestHistory(),
@@ -86,10 +121,6 @@ export default function App() {
             setDigestHistory(loadedHistory);
           })
           .catch((err) => console.debug('Digest data deferred fetch error:', err));
-      } else {
-        setGroups([]);
-        setItems([]);
-        setReminders({ overdue: [], upcoming: [], totalActiveReminders: 0 });
       }
     } catch (err) {
       console.error('Error fetching data:', err);
