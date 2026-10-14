@@ -96,15 +96,23 @@ jobs:
           echo "commits_count=$COMMITS_COUNT" >> $GITHUB_OUTPUT
           echo "Number of incoming commits to promote: $COMMITS_COUNT"
 
+          # Configure git identity for simulation
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
           # Simulate merge to detect conflicts in advance
           echo "Testing merge conflict detection..."
           git checkout -B "temp-target" "origin/${{ inputs.target_branch }}"
           if ! git merge --no-commit --no-ff "origin/${{ inputs.source_branch }}"; then
             echo "::error::Merge conflict detected! '${{ inputs.source_branch }}' cannot be cleanly merged into '${{ inputs.target_branch }}'."
-            git merge --abort || true
+            if [ -f .git/MERGE_HEAD ]; then
+              git merge --abort || true
+            fi
             exit 1
           fi
-          git merge --abort || true
+          if [ -f .git/MERGE_HEAD ]; then
+            git merge --abort || true
+          fi
           echo "Pre-merge check passed cleanly: zero merge conflicts detected."
 
           # Switch working directory to source branch to validate incoming code
