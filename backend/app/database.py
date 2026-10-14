@@ -38,8 +38,17 @@ def create_engine_for_url(url: Optional[str] = None) -> Engine:
     """
     db_url = url or get_database_url()
     connect_args = {}
+
+    pool_pre_ping_env = os.getenv("DB_POOL_PRE_PING")
+    if pool_pre_ping_env is not None:
+        pool_pre_ping = pool_pre_ping_env.lower() in ("true", "1", "yes")
+    else:
+        # Eliminate cross-region SELECT 1 ping roundtrips in AWS Lambda; keep True for container/local setups
+        is_lambda = bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME") or os.getenv("AWS_EXECUTION_ENV"))
+        pool_pre_ping = not is_lambda
+
     engine_kwargs = {
-        "pool_pre_ping": True,
+        "pool_pre_ping": pool_pre_ping,
     }
 
     if db_url.startswith("sqlite"):
@@ -54,12 +63,16 @@ def create_engine_for_url(url: Optional[str] = None) -> Engine:
             if db_dir and not os.path.exists(db_dir):
                 os.makedirs(db_dir, exist_ok=True)
     elif is_postgres_url(db_url):
+        is_lambda = bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME") or os.getenv("AWS_EXECUTION_ENV"))
+        default_pool_recycle = "300" if is_lambda else "1800"
+        default_pool_size = "5" if is_lambda else "10"
+        default_max_overflow = "10" if is_lambda else "20"
         # Connection pooling optimizations for PostgreSQL
         engine_kwargs.update({
-            "pool_size": int(os.getenv("DB_POOL_SIZE", "10")),
-            "max_overflow": int(os.getenv("DB_MAX_OVERFLOW", "20")),
+            "pool_size": int(os.getenv("DB_POOL_SIZE", default_pool_size)),
+            "max_overflow": int(os.getenv("DB_MAX_OVERFLOW", default_max_overflow)),
             "pool_timeout": int(os.getenv("DB_POOL_TIMEOUT", "30")),
-            "pool_recycle": int(os.getenv("DB_POOL_RECYCLE", "1800")),
+            "pool_recycle": int(os.getenv("DB_POOL_RECYCLE", default_pool_recycle)),
         })
 
     engine = create_engine(

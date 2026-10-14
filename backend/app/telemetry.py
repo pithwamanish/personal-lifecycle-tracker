@@ -533,13 +533,27 @@ def init_opentelemetry(app: FastAPI) -> None:
             if not endpoint_base.endswith("/v1/traces")
             else endpoint_base
         )
-        span_exporter = OTLPSpanExporter(endpoint=traces_endpoint, headers=headers if headers else None)
+        otlp_timeout = int(os.getenv("OTEL_EXPORTER_OTLP_TIMEOUT", "2"))
+        span_exporter = OTLPSpanExporter(
+            endpoint=traces_endpoint,
+            headers=headers if headers else None,
+            timeout=otlp_timeout,
+        )
 
+        force_sync = os.getenv("OTEL_FORCE_SYNC_EXPORT", "false").lower() in ("true", "1", "yes")
         is_lambda = bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME") or os.getenv("AWS_EXECUTION_ENV"))
-        if is_lambda:
+        if is_lambda and force_sync:
             _tracer_provider.add_span_processor(SimpleSpanProcessor(span_exporter))
         else:
-            _tracer_provider.add_span_processor(BatchSpanProcessor(span_exporter))
+            _tracer_provider.add_span_processor(
+                BatchSpanProcessor(
+                    span_exporter,
+                    max_queue_size=2048,
+                    schedule_delay_millis=500,
+                    max_export_batch_size=512,
+                    export_timeout_millis=2000,
+                )
+            )
         otel_trace.set_tracer_provider(_tracer_provider)
 
         # Metrics Setup
@@ -548,8 +562,17 @@ def init_opentelemetry(app: FastAPI) -> None:
             if not endpoint_base.endswith("/v1/metrics")
             else endpoint_base
         )
-        metric_exporter = OTLPMetricExporter(endpoint=metrics_endpoint, headers=headers if headers else None)
-        metric_reader = PeriodicExportingMetricReader(metric_exporter, export_interval_millis=1000)
+        metric_exporter = OTLPMetricExporter(
+            endpoint=metrics_endpoint,
+            headers=headers if headers else None,
+            timeout=otlp_timeout,
+        )
+        metric_interval = int(os.getenv("OTEL_METRIC_EXPORT_INTERVAL", "5000"))
+        metric_reader = PeriodicExportingMetricReader(
+            metric_exporter,
+            export_interval_millis=metric_interval,
+            export_timeout_millis=2000,
+        )
         _meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
         otel_metrics.set_meter_provider(_meter_provider)
 
@@ -702,11 +725,6 @@ class MetricsMiddleware:
                         status_code=status_code,
                         duration_ms=duration_ms,
                     )
-                    if _meter_provider is not None:
-                        try:
-                            _meter_provider.force_flush()
-                        except Exception:
-                            pass
         else:
             try:
                 await self.app(scope, receive, send_wrapper)
