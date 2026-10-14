@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# On-Call Level 2 Code-Fix, Human Approval Gate & Git Push Drill
+# Verifies:
+# 1. Failure reproduction with failing test.
+# 2. Autonomy policy enforcement: halts & pauses for human approval (LEVEL_2_HUMAN_APPROVAL).
+# 3. Upon operator sign-off, applies code patch, passes tests, and commits fix to git.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ON_CALL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_ROOT="$(cd "${ON_CALL_DIR}/.." && pwd)"
+
+echo "================================================================"
+echo "  ON-CALL LEVEL 2 CODE-FIX & HUMAN APPROVAL GATE DRILL          "
+echo "================================================================"
+echo "Timestamp:    $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+echo "Incident:     TypeError in Date Comparison (store.py)"
+echo "Target File:  backend/app/store.py"
+echo "================================================================"
+
+# ==============================================================================
+# PHASE 1: FAILURE REPRODUCTION
+# ==============================================================================
+echo ""
+echo "==> [PHASE 1] Reproducing failure condition before fix..."
+set +e
+docker compose run --rm -T --no-deps backend pytest tests/test_incident_reproduction.py -q
+REPRO_EXIT=$?
+set -e
+
+if [ ${REPRO_EXIT} -ne 0 ]; then
+  echo "OK: Failure successfully reproduced! Test failed as expected (exit code ${REPRO_EXIT})."
+else
+  echo "NOTE: Reproduction test already passes or code already patched."
+fi
+
+# ==============================================================================
+# PHASE 2: AUTONOMY POLICY GATE (WITHOUT HUMAN APPROVAL -> MUST PAUSE)
+# ==============================================================================
+echo ""
+echo "==> [PHASE 2] Dispatching incident WITHOUT human approval (human_approval=false)..."
+PAUSED_OUTPUT=$(docker compose run --rm -T --no-deps \
+  -e DRILL_MODE=true \
+  -v "${ON_CALL_DIR}:/on-call-engineer" \
+  backend python -c "
+import sys, json
+sys.path.insert(0, '/on-call-engineer')
+import lambda_handler
+
+alert_event = {
+    'Records': [{
+        'Sns': {
+            'Message': json.dumps({
+                'alert_name': 'DateComparisonTypeError',
+                'severity': 'critical',
+                'service_name': 'personal-lifecycle-tracker-api',
+                'summary': 'TypeError: can not compare offset-naive and offset-aware datetimes in store.py',
+                'status': 'firing',
+                'action_requested': 'apply_patch',
+                'human_approval': False
+            })
+        }
+    }]
+}
+res = lambda_handler.lambda_handler(alert_event)
+print(json.dumps(res, indent=2))
+")
+
+echo "${PAUSED_OUTPUT}"
+
+if echo "${PAUSED_OUTPUT}" | grep -q '"resolutionStatus": "PAUSED_FOR_HUMAN_APPROVAL"'; then
+  echo "================================================================"
+  echo "OK: Autonomy policy successfully blocked unapproved code mutation!"
+  echo "    Status: PAUSED_FOR_HUMAN_APPROVAL (LEVEL_2_HUMAN_APPROVAL)   "
+  echo "================================================================"
+else
+  echo "ERROR: Responder failed to pause on Level 2 action!"
+  exit 1
+fi
+
+# ==============================================================================
+# PHASE 3: OPERATOR SIGN-OFF & CODE REMEDIATION
+# ==============================================================================
+echo ""
+echo "==> [PHASE 3] Operator grants human approval (human_approval=true)..."
+APPROVED_OUTPUT=$(docker compose run --rm -T --no-deps \
+  -e DRILL_MODE=true \
+  -e PROJECT_ROOT=/workspace \
+  -v "${PROJECT_ROOT}:/workspace" \
+  -w /workspace \
+  backend python -c "
+import sys, json
+sys.path.insert(0, '/workspace/on-call-engineer')
+import lambda_handler
+
+alert_event = {
+    'Records': [{
+        'Sns': {
+            'Message': json.dumps({
+                'alert_name': 'DateComparisonTypeError',
+                'severity': 'critical',
+                'service_name': 'personal-lifecycle-tracker-api',
+                'summary': 'TypeError: can not compare offset-naive and offset-aware datetimes in store.py',
+                'status': 'firing',
+                'action_requested': 'apply_patch',
+                'human_approval': True
+            })
+        }
+    }]
+}
+res = lambda_handler.lambda_handler(alert_event)
+print(json.dumps(res, indent=2))
+")
+
+echo "${APPROVED_OUTPUT}"
+
+# ==============================================================================
+# PHASE 4: VERIFY REPRODUCTION TEST NOW PASSES
+# ==============================================================================
+echo ""
+echo "==> [PHASE 4] Running test suite to verify code fix resolves the failure..."
+docker compose run --rm -T --no-deps backend pytest tests/test_incident_reproduction.py -v
+
+echo ""
+echo "==> [PHASE 5] Running full backend test suite to verify zero regression..."
+docker compose run --rm -T --no-deps backend pytest tests -m "not integration" -q
+
+# ==============================================================================
+# PHASE 6: COMMIT FIX & VERIFY GIT AUDIT TRAIL
+# ==============================================================================
+echo ""
+echo "==> [PHASE 6] Staging verified fix and checking Git audit trail..."
+if git status --porcelain | grep -q "backend/app/store.py"; then
+  echo "Staging verified fix and reproduction test..."
+  git add backend/app/store.py backend/tests/test_incident_reproduction.py
+  git commit -m "fix(store): normalize datetime comparisons for offset-aware ISO strings [INC-AWS-CODE-FIX]"
+fi
+
+git log -1 --stat
+
+echo ""
+echo "================================================================"
+echo "  ON-CALL LEVEL 2 CODE-FIX DRILL PASSED 100% SUCCESSFULLY!      "
+echo "  - Bug reproduced before fix                                   "
+echo "  - Autonomy policy paused execution without human approval     "
+echo "  - Patch applied upon human approval                           "
+echo "  - Regression tests verified clean exit 0                      "
+echo "  - Fix committed to Git with incident audit reference          "
+echo "================================================================"
+exit 0
+

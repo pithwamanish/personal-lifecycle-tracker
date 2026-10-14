@@ -167,10 +167,52 @@ make on-call-simulate-cloud
 bash on-call-engineer/cloud-simulator/scripts/run-cloud-simulation
 ```
 
-The simulation validates that:
-1. The SNS alert topic is created and accepts messages in the emulator.
-2. The Lambda dispatcher receives the SNS event, extracts the payload, and dispatches the Fargate task.
-3. The Fargate task executes headlessly in an isolated container.
-4. All artifacts (`diff.patch`, `evidence.json`, `transcript.log`) are securely uploaded to S3.
-5. The container terminates immediately, leaving 0 lingering compute containers.
+---
 
+## 7. Live AWS Serverless On-Call Responder (SNS -> Lambda)
+
+For production deployments on AWS, the responder deploys as a native serverless Lambda function (`on-call-engineer/lambda_handler.py`) integrated with Amazon SNS and CloudWatch Alarms:
+
+```
+[CloudWatch Alarm / EventBridge]
+           │
+           │ (Alarm Firing Notification)
+           ▼
+[Amazon SNS Alert Topic]
+           │
+           │ (Event Notification)
+           ▼
+[AWS Lambda Responder] (on-call-engineer/lambda_handler.py)
+           │
+           ├──► Normalizes incoming alert payload
+           ├──► Evaluates Autonomy Policy outside the model:
+           │      - LEVEL_1_AUTO_EXECUTE: Autonomous operational remediation (rollback, restart)
+           │      - LEVEL_2_HUMAN_APPROVAL: Pauses execution, emits patch diff, awaits operator sign-off
+           │      - LEVEL_3_ESCALATE: Hard escalation to human engineer
+           ├──► Verifies service health endpoint
+           └──► Emits timestamped audit log to CloudWatch Logs
+```
+
+### Running the Live AWS Level 1 Drill
+```bash
+make on-call-aws-drill
+# or: bash on-call-engineer/scripts/run-aws-incident-drill
+```
+
+---
+
+## 8. Level 2 Code-Fix, Human Approval Gate & Automated Git Push Drill
+
+When an incident is caused by a real code defect rather than an operational blip, the responder executes the Level 2 workflow:
+
+1. **Failure Reproduction**: Runs a reproduction test proving the failure before touching any code.
+2. **Autonomy Policy Enforcement (Without Approval)**: If `human_approval=false`, the responder **halts immediately** (`PAUSED_FOR_HUMAN_APPROVAL`, HTTP 202) and emits the proposed patch diff for human review.
+3. **Operator Sign-Off**: Once the operator reviews the proposed diff and approves (`human_approval=true`), the responder applies the minimal patch.
+4. **Test Verification**: Executes the reproduction test (verifying HTTP 201 Created) and the complete backend test suite.
+5. **Security Gate & Git Audit Trail**: Triggers pre-commit Semgrep SAST scan (0 findings required) and commits the verified fix to Git with incident audit references.
+
+### Running the Level 2 Code-Fix Drill
+```bash
+make on-call-code-fix-drill
+# or: bash on-call-engineer/scripts/run-code-fix-drill
+```

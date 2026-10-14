@@ -245,6 +245,9 @@ on-call-simulate-cloud:
 on-call-aws-drill:
 	bash on-call-engineer/scripts/run-aws-incident-drill
 
+on-call-code-fix-drill:
+	bash on-call-engineer/scripts/run-code-fix-drill
+
 # Local Kubernetes Deployment with Kind
 KIND_CLUSTER_NAME ?= lifecycle-cluster
 
