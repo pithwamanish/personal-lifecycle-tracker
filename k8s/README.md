@@ -1,6 +1,6 @@
 # Local Kubernetes Deployment with Kind
 
-This directory contains declarative Kubernetes manifests for deploying the **Personal Lifecycle Tracker** stack to a local Kubernetes cluster using [Kind (Kubernetes in Docker)](https://kind.sigs.k8s.io/), covering the requirements of **Homework 3 (Containerize and Deploy)**.
+This directory contains declarative Kubernetes manifests for deploying the **Personal Lifecycle Tracker** stack to a local Kubernetes cluster using [Kind (Kubernetes in Docker)](https://kind.sigs.k8s.io/), providing containerized multi-service deployment with persistent volumes and health probes.
 
 ---
 
@@ -9,7 +9,7 @@ This directory contains declarative Kubernetes manifests for deploying the **Per
 - **Database**: PostgreSQL 16 containerized deployment backed by a 1Gi `PersistentVolumeClaim` (`postgres-pvc`) on port 5432 with `pg_isready` health probes.
 - **Backend Service**: FastAPI backend (`personal-lifecycle-backend:latest`) configured with container probes targeting `/health` on port 8000.
 - **Frontend / Ingress Gateway**: Caddy 2 reverse proxy serving the static React 19 SPA and reverse proxying API traffic, exposed via `NodePort 30088`.
-- **Kustomize Composition**: Managed declaratively through [`k8s/kustomization.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/k8s/kustomization.yaml).
+- **Kustomize Composition**: Managed declaratively through [`k8s/kustomization.yaml`](kustomization.yaml).
 
 ---
 

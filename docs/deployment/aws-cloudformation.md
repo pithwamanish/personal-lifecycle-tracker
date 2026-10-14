@@ -1,8 +1,8 @@
 # Deploying Personal Lifecycle Tracker to AWS via CloudFormation
 
 This guide covers deploying the **Personal Lifecycle Tracker** to Amazon Web Services using **AWS CloudFormation** across two independent environments:
-1. **Development Environment (`dev`)**: [`cloudformation/aws-ec2-compose.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose.yaml) — Default environment `dev`, isolated VPC CIDR `10.1.0.0/16`.
-2. **Production Environment Copy (`production`)**: [`cloudformation/aws-ec2-compose-prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose-prod.yaml) — Default environment `production`, isolated VPC CIDR `10.0.0.0/16`.
+1. **Development Environment (`dev`)**: [`cloudformation/aws-ec2-compose.yaml`](../../cloudformation/aws-ec2-compose.yaml) — Default environment `dev`, isolated VPC CIDR `10.1.0.0/16`.
+2. **Production Environment Copy (`production`)**: [`cloudformation/aws-ec2-compose-prod.yaml`](../../cloudformation/aws-ec2-compose-prod.yaml) — Default environment `production`, isolated VPC CIDR `10.0.0.0/16`.
 
 Both templates deploy self-contained, Free-Tier eligible infrastructure stacks without needing external tools or Terraform state management.
 
@@ -32,8 +32,8 @@ Both templates deploy self-contained, Free-Tier eligible infrastructure stacks w
    - Under *Prerequisite - Prepare template*, choose **"Choose an existing template"**.
    - Under *Template source*, choose **"Upload a template file"**.
    - Select:
-     - For Dev: [`cloudformation/aws-ec2-compose.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose.yaml)
-     - For Production: [`cloudformation/aws-ec2-compose-prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose-prod.yaml)
+     - For Dev: [`cloudformation/aws-ec2-compose.yaml`](../../cloudformation/aws-ec2-compose.yaml)
+     - For Production: [`cloudformation/aws-ec2-compose-prod.yaml`](../../cloudformation/aws-ec2-compose-prod.yaml)
    - Click **Next**.
 
 3. **Specify Stack Details**:

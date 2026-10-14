@@ -12,7 +12,7 @@ It is governed by the AI-Native Meta-Environment (`meta-environment`) capability
 - **Database**: PostgreSQL 16 containerized (`postgres:16-alpine`) or SQLite fallback.
 - **Orchestration**: Docker Compose multi-service architecture (Database + Backend + Frontend).
 - **Production Gateway**: Caddy 2 minimal reverse proxy with SPA fallback and security headers.
-- **Contract**: OpenAPI 3.0.3 specification frozen in [`contracts/openapi.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/contracts/openapi.yaml).
+- **Contract**: OpenAPI 3.0.3 specification frozen in [`contracts/openapi.yaml`](contracts/openapi.yaml).
 
 ### Network & Port Layout
 | Service | Container Port | Host Port (Configurable) | Health / Status Endpoint |
@@ -345,12 +345,12 @@ VITE_BACKEND_URL=http://backend:8000
 Execute all validations and formatting inside Docker without host dependencies:
 
 - **Render**:
-  - Dev Blueprint: [`render.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.yaml) | Prod Blueprint Copy: [`render.prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.prod.yaml)
-  - Dev Terraform: [`terraform/render/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/render/) | Prod Terraform Copy: [`terraform/render-prod/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/render-prod/)
+  - Dev Blueprint: [`render.yaml`](render.yaml) | Prod Blueprint Copy: [`render.prod.yaml`](render.prod.yaml)
+  - Dev Terraform: [`terraform/render/`](terraform/render/) | Prod Terraform Copy: [`terraform/render-prod/`](terraform/render-prod/)
   - Validation: `make tf-validate-render` and `make tf-validate-render-prod`
 - **AWS**:
-  - Dev Terraform: [`terraform/aws/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/aws/) | Prod Terraform Copy: [`terraform/aws-prod/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/aws-prod/)
-  - Dev CloudFormation: [`cloudformation/aws-ec2-compose.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose.yaml) | Prod CloudFormation Copy: [`cloudformation/aws-ec2-compose-prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/cloudformation/aws-ec2-compose-prod.yaml)
+  - Dev Terraform: [`terraform/aws/`](terraform/aws/) | Prod Terraform Copy: [`terraform/aws-prod/`](terraform/aws-prod/)
+  - Dev CloudFormation: [`cloudformation/aws-ec2-compose.yaml`](cloudformation/aws-ec2-compose.yaml) | Prod CloudFormation Copy: [`cloudformation/aws-ec2-compose-prod.yaml`](cloudformation/aws-ec2-compose-prod.yaml)
   - Validation: `make tf-validate` (validates all Terraform environments) and `make cf-validate` (validates both CloudFormation templates)
 
 ---

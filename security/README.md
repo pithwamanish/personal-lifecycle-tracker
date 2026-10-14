@@ -8,10 +8,10 @@ This directory documents the security architecture, deterministic static applica
 
 | Document | Purpose | Standard / Tool | Status |
 |---|---|---|---|
-| [`pr-audit.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/security/pr-audit.md) | PR Security Review & Automated Gating | OWASP Top 10, Auth Boundaries | `VERIFIED` |
-| [`deterministic-scan.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/security/deterministic-scan.md) | Deterministic Static Analysis & CVE Audit | Semgrep, Bandit, npm audit, Trufflehog | `0 HIGH / 0 CRITICAL` |
-| [`agent-extension-security.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/security/agent-extension-security.md) | Agent Pack, MCP & Hook Security Analysis | Agent Plugins 1.0, Least Privilege | `COMPLIANT` |
-| [`ai-tool-data-policy.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/security/ai-tool-data-policy.md) | AI Tool Usage & Enterprise Data Governance | Human-in-the-Loop, Zero-Leakage Policy | `ENFORCED` |
+| [`pr-audit.md`](pr-audit.md) | PR Security Review & Automated Gating | OWASP Top 10, Auth Boundaries | `VERIFIED` |
+| [`deterministic-scan.md`](deterministic-scan.md) | Deterministic Static Analysis & CVE Audit | Semgrep, Bandit, npm audit, Trufflehog | `0 HIGH / 0 CRITICAL` |
+| [`agent-extension-security.md`](agent-extension-security.md) | Agent Pack, MCP & Hook Security Analysis | Agent Plugins 1.0, Least Privilege | `COMPLIANT` |
+| [`ai-tool-data-policy.md`](ai-tool-data-policy.md) | AI Tool Usage & Enterprise Data Governance | Human-in-the-Loop, Zero-Leakage Policy | `ENFORCED` |
 
 ---
 

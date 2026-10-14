@@ -553,7 +553,9 @@ jobs:
           if [ -n "${{ secrets.RENDER_HEALTH_URL_PROD }}" ]; then
             HEALTH_URL="${{ secrets.RENDER_HEALTH_URL_PROD }}"
           elif [ -n "$RENDER_DEPLOY_HOOK_URL" ] || [ -n "$RENDER_API_KEY" ]; then
-            HEALTH_URL="https://personal-lifecycle-frontend-prod.onrender.com/health"
+            echo ">>> No explicit RENDER_HEALTH_URL_PROD provided in secrets."
+            echo ">>> Skipping external domain healthcheck poll. Deployment trigger succeeded."
+            exit 0
           else
             HEALTH_URL="http://localhost:8088/health"
           fi

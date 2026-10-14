@@ -1,8 +1,8 @@
 # Deploying Personal Lifecycle Tracker to AWS via Terraform
 
 This guide covers deploying the **Personal Lifecycle Tracker** to Amazon Web Services (AWS) using **Terraform** across two independent environments:
-1. **Development (`dev`)**: Located in [`terraform/aws/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/aws/), default environment `dev`, isolated VPC CIDR `10.1.0.0/16`.
-2. **Production (`production`)**: Located in [`terraform/aws-prod/`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/aws-prod/), default environment `production`, isolated VPC CIDR `10.0.0.0/16`.
+1. **Development (`dev`)**: Located in [`terraform/aws/`](../../terraform/aws/), default environment `dev`, isolated VPC CIDR `10.1.0.0/16`.
+2. **Production (`production`)**: Located in [`terraform/aws-prod/`](../../terraform/aws-prod/), default environment `production`, isolated VPC CIDR `10.0.0.0/16`.
 
 Each environment is provisioned as an isolated, Free-Tier eligible Amazon EC2 instance running the multi-container Docker Compose stack (`docker-compose.prod.yml`) with automated reverse proxying managed by Caddy 2.
 

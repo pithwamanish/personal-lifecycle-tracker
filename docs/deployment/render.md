@@ -27,7 +27,7 @@ flowchart LR
 ### 1. Development Environment (`render.yaml`)
 To deploy the **dev** environment:
 1. Connect your repository to Render Blueprints.
-2. Render uses [`render.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.yaml) by default.
+2. Render uses [`render.yaml`](../../render.yaml) by default.
 3. Provisions:
    - `personal-lifecycle-db-dev` (Database: `lifecycle_dev`, Plan: `free`)
    - `personal-lifecycle-backend-dev` (FastAPI Web Service, Plan: `free`)
@@ -37,7 +37,7 @@ To deploy the **dev** environment:
 ### 2. Production Environment Copy (`render.prod.yaml`)
 To deploy the independent **production** environment:
 1. In the Render Dashboard, create a new Blueprint instance.
-2. Point the Blueprint configuration to [`render.prod.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/render.prod.yaml).
+2. Point the Blueprint configuration to [`render.prod.yaml`](../../render.prod.yaml).
 3. Provisions:
    - `personal-lifecycle-db-prod` (Database: `lifecycle`, Plan: `starter`)
    - `personal-lifecycle-backend-prod` (FastAPI Web Service, Plan: `starter`)
@@ -92,8 +92,8 @@ Both modules export identical output attributes:
 ## Option C: GitHub Actions CI/CD (`.github/workflows/ci.yml`)
 
 The GitHub Actions workflow deploys automatically based on branch or workflow dispatch:
-- **Pushes to `dev` / `develop`**: Deploys to the Dev environment and polls `https://personal-lifecycle-frontend-dev.onrender.com/health`.
-- **Pushes to `main`**: Deploys to the Production copy and polls `https://personal-lifecycle-frontend-prod.onrender.com/health`.
+- **Pushes to `dev` / `develop`**: Deploys to the Dev environment and polls the configured Dev health URL (`RENDER_HEALTH_URL` or `https://<dev-service>.onrender.com/health`).
+- **Pushes to `main`**: Deploys to the Production copy and polls the configured Production health URL (`RENDER_HEALTH_URL` or `https://<prod-service>.onrender.com/health`).
 - **Manual Trigger**: Select `target_environment: production` or `target_environment: dev`.
 
-See the [CI/CD Pipeline Guide](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docs/deployment/ci-cd.md) for secrets configuration.
+See the [CI/CD Pipeline Guide](ci-cd.md) for secrets configuration.

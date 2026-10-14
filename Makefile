@@ -229,7 +229,7 @@ on-call-verify:
 on-call-simulate-cloud:
 	bash on-call-engineer/cloud-simulator/scripts/run-cloud-simulation
 
-# Local Kubernetes Deployment with Kind (Homework 3)
+# Local Kubernetes Deployment with Kind
 KIND_CLUSTER_NAME ?= lifecycle-cluster
 
 kind-up:

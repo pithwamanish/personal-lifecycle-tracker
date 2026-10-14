@@ -19,10 +19,10 @@ This document records the end-to-end AI-assisted development workflow used to bu
 
 Rather than relying on vague prompts, the development workflow anchored all coding agents using deterministic project context files:
 
-1. [`AGENTS.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/AGENTS.md): Loaded into every session. Enforced the zero-host-runtime mandate, directory confinement, and RTK command wrappers.
-2. [`product-spec.md`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/product-spec.md): Grounded all entity models, field definitions, and business logic before any code was written.
-3. [`contracts/openapi.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/contracts/openapi.yaml): Served as the frozen API contract ensuring zero drift between frontend service clients and FastAPI router implementations.
-4. [`docker-compose.yaml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/docker-compose.yaml): Standardized local execution across all developers and agents.
+1. [`AGENTS.md`](../AGENTS.md): Loaded into every session. Enforced the zero-host-runtime mandate, directory confinement, and RTK command wrappers.
+2. [`product-spec.md`](../product-spec.md): Grounded all entity models, field definitions, and business logic before any code was written.
+3. [`contracts/openapi.yaml`](../contracts/openapi.yaml): Served as the frozen API contract ensuring zero drift between frontend service clients and FastAPI router implementations.
+4. [`docker-compose.yaml`](../docker-compose.yaml): Standardized local execution across all developers and agents.
 
 ---
 

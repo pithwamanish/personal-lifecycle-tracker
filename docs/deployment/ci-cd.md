@@ -1,6 +1,6 @@
 # CI/CD Pipeline & Automated Render Deployment Guide
 
-This guide details the continuous integration and continuous deployment (CI/CD) pipeline for the **Personal Lifecycle Tracker** implemented via GitHub Actions ([`.github/workflows/ci.yml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/.github/workflows/ci.yml)).
+This guide details the continuous integration and continuous deployment (CI/CD) pipeline for the **Personal Lifecycle Tracker** implemented via GitHub Actions ([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)).
 
 ---
 
@@ -121,14 +121,14 @@ Configure these secrets under **Settings > Secrets and variables > Actions** in 
 | `RENDER_DEPLOY_HOOK_URL` | Optional | Render 1-click Deploy Hook URL (direct fallback) | `https://api.render.com/deploy/srv-c1234567890abcdef?key=secretkey` |
 | `RENDER_API_KEY` | Optional | Render API Key for REST API deployment | `rnd_abcdef1234567890` |
 | `RENDER_SERVICE_ID` | Optional | Render Service ID targeted for deployment | `srv-c1234567890abcdef` |
-| `RENDER_HEALTH_URL` | Optional | Custom live healthcheck URL to validate | `https://personal-lifecycle-frontend.onrender.com/health` |
+| `RENDER_HEALTH_URL` | Optional | Custom live healthcheck URL to validate | `https://<your-service-name>.onrender.com/health` |
 | `STRICT_HEALTH_CHECK` | Optional | Enforce pipeline failure on healthcheck timeout (`true` / `false`) | `true` (default: `true`) |
 
 ---
 
 ## 4. Provisioning the GitHub OIDC Role via Terraform
 
-The repository includes a ready-to-use Terraform module ([`terraform/aws/oidc.tf`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/terraform/aws/oidc.tf)) that creates:
+The repository includes a ready-to-use Terraform module ([`terraform/aws/oidc.tf`](../../terraform/aws/oidc.tf)) that creates:
 1. The **GitHub OIDC Identity Provider** (`token.actions.githubusercontent.com`).
 2. The **IAM Role** scoped strictly to your GitHub repository with `sts:AssumeRoleWithWebIdentity`.
 3. An **IAM Policy** granting access to `personal-lifecycle/render` in Secrets Manager and SSM.
@@ -192,7 +192,7 @@ rtk act -j test-frontend -W .github/workflows/ci.yml
 
 ## 7. Dev to Production Manual Promotion Workflow (`promote-dev-to-prod.yml`)
 
-The repository includes a dedicated manual promotion workflow ([`.github/workflows/promote-dev-to-prod.yml`](file:///home/manish/AI-Practice/DataTalks/ai-dev-tools-zoomcamp-2026/project/personal-lifecycle-tracker/.github/workflows/promote-dev-to-prod.yml)) designed to promote verified development versions from `dev` to the production branch (`main`), cut semantic release tags, compile release notes, and deploy directly to the production Render environment.
+The repository includes a dedicated manual promotion workflow ([`.github/workflows/promote-dev-to-prod.yml`](../../.github/workflows/promote-dev-to-prod.yml)) designed to promote verified development versions from `dev` to the production branch (`main`), cut semantic release tags, compile release notes, and deploy directly to the production Render environment.
 
 ### A. Promotion Workflow Architecture
 
