@@ -24,7 +24,7 @@ test-frontend: network-init
 	docker compose run --rm frontend npm test
 
 test-e2e: network-init
-	docker compose run --rm -T e2e
+	docker compose run --rm e2e
 
 lint: network-init
 	docker compose run --rm frontend npm run lint

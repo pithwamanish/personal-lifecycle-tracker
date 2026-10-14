@@ -20,23 +20,20 @@ def resolve_service_url(env_var: str, primary_url: str, fallback_url: str, probe
     if custom:
         return custom
 
-    # Try primary URL (e.g. http://backend:8000)
-    try:
-        with httpx.Client(timeout=1.5) as client:
-            resp = client.get(f"{primary_url}{probe_path}")
-            if resp.status_code < 500:
-                return primary_url
-    except Exception:
-        pass
-
-    # Try fallback URL (e.g. http://localhost:8003)
-    try:
-        with httpx.Client(timeout=1.5) as client:
-            resp = client.get(f"{fallback_url}{probe_path}")
-            if resp.status_code < 500:
-                return fallback_url
-    except Exception:
-        pass
+    # Try primary container network URL, explicit container name, then host port fallback
+    candidate_urls = [
+        primary_url,
+        "http://personal-lifecycle-tracker-backend:8000" if "backend" in primary_url else primary_url,
+        fallback_url,
+    ]
+    for url in candidate_urls:
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                resp = client.get(f"{url}{probe_path}")
+                if resp.status_code < 500:
+                    return url
+        except Exception:
+            continue
 
     return primary_url
 
@@ -84,16 +81,23 @@ def verify_services_healthy(live_backend_url: str):
     Ensures backend service is alive before running any integration tests.
     Skips the integration suite cleanly if docker-compose services are not running.
     """
-    try:
-        with httpx.Client(timeout=3.0) as client:
-            res = client.get(f"{live_backend_url}/health")
-            if res.status_code != 200:
-                pytest.skip(f"Backend at {live_backend_url} returned status {res.status_code}, skipping integration suite.")
-    except Exception as exc:
-        pytest.skip(
-            f"Cannot connect to backend service at {live_backend_url} ({exc}). "
-            "Integration tests require running docker-compose containers (run 'make up' or 'docker compose up -d')."
-        )
+    last_err = None
+    for _ in range(5):
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                res = client.get(f"{live_backend_url}/health")
+                if res.status_code == 200:
+                    return
+                last_err = f"Backend returned status {res.status_code}"
+        except Exception as exc:
+            last_err = str(exc)
+        import time
+        time.sleep(1)
+
+    pytest.skip(
+        f"Cannot connect to backend service at {live_backend_url} ({last_err}). "
+        "Integration tests require running docker-compose containers (run 'make up' or 'docker compose up -d')."
+    )
 
 
 @pytest.fixture(autouse=True)

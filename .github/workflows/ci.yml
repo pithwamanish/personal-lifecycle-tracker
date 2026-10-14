@@ -99,9 +99,9 @@ jobs:
         run: |
           docker network inspect personal-lifecycle-observability-net >/dev/null 2>&1 || docker network create personal-lifecycle-observability-net
 
-      - name: Build Docker Compose Services
+      - name: Build Docker Compose Services (including test profile)
         run: |
-          docker compose build
+          docker compose --profile test build
 
       - name: Start Compose Services (Database, Backend, Frontend)
         run: |
@@ -116,11 +116,18 @@ jobs:
 
       - name: Run PostgreSQL Integration Tests
         run: |
-          docker compose run --rm -T backend pytest tests/integration -v
+          docker compose run --rm -T -e INTEGRATION_BACKEND_URL=http://personal-lifecycle-tracker-backend:8000 backend pytest tests/integration -v
 
       - name: Run Playwright End-to-End Tests
         run: |
-          docker compose run --rm -T e2e
+          docker compose run --rm e2e
+
+      - name: Dump Compose Logs on Failure
+        if: failure()
+        run: |
+          docker compose logs --tail 100 backend
+          docker compose logs --tail 100 frontend
+          docker compose logs --tail 100 db
 
       - name: Tear Down Compose Stack
         if: always()

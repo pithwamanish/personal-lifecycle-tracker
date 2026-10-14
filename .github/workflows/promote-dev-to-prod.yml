@@ -158,7 +158,7 @@ jobs:
           docker compose up -d db backend
           echo "Waiting for backend healthiness..."
           timeout 60s bash -c 'until curl -fsS http://localhost:8003/health > /dev/null 2>&1; do sleep 2; done'
-          docker compose run --rm -T backend pytest tests/integration -v
+          docker compose run --rm -T -e INTEGRATION_BACKEND_URL=http://personal-lifecycle-tracker-backend:8000 backend pytest tests/integration -v
           docker compose down -v
 
       - name: Summarize Validation Stage
