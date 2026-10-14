@@ -86,7 +86,7 @@ To optimize feedback loops and token consumption:
 
 ### D. Automated Health Endpoint Validation
 - Triggering a deployment is only half the release contract: the pipeline must verify that the deployed service actually boots, connects to the database, and serves traffic.
-- The pipeline enters a resilient polling loop querying the live healthcheck endpoint (e.g., `http://localhost:8088/health` or live URL):
+- The pipeline enters a resilient polling loop querying the live healthcheck endpoint (e.g., `http://127.0.0.1:8088/health` or live URL):
   - Checks every 10 seconds for up to 30 attempts (5 minutes).
   - Verifies HTTP 200 OK status code.
   - Inspects the JSON body to verify `"status": "healthy"` and database connectivity.
