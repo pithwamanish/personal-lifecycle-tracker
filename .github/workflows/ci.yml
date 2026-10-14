@@ -373,6 +373,10 @@ jobs:
             docker pull "$BACKEND_IMAGE" || true
             echo "Pulling frontend image from ECR..."
             docker pull "$FRONTEND_IMAGE" || true
+          else
+            echo "Notice: Operating without remote ECR registry; building images on runner..."
+            BACKEND_IMAGE="$BACKEND_IMAGE" FRONTEND_IMAGE="$FRONTEND_IMAGE" \
+              docker compose -f docker-compose.prod.yml build
           fi
 
           # Launch container stack without building
