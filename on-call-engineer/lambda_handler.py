@@ -332,17 +332,23 @@ def lambda_handler(event, context=None):
 
 
 if __name__ == "__main__":
+    alert_name = os.environ.get("ALERT_NAME", "HighHttpErrorRate")
+    action_requested = os.environ.get("ACTION_REQUESTED", "rollback" if alert_name == "HighHttpErrorRate" else None)
+    human_approval = os.environ.get("HUMAN_APPROVAL", "false").lower() == "true"
+    summary_msg = os.environ.get("ALERT_SUMMARY", f"CloudWatch Alarm firing for {alert_name}")
+
     sample_event = {
         "Records": [
             {
                 "Sns": {
                     "Message": json.dumps({
-                        "alert_name": "DateComparisonTypeError",
+                        "alert_name": alert_name,
                         "severity": "critical",
                         "service_name": "personal-lifecycle-tracker-api",
-                        "summary": "TypeError: can't compare offset-naive and offset-aware datetimes in store.py",
+                        "summary": summary_msg,
                         "status": "firing",
-                        "human_approval": False
+                        "action_requested": action_requested,
+                        "human_approval": human_approval
                     })
                 }
             }
@@ -352,3 +358,4 @@ if __name__ == "__main__":
     result = lambda_handler(sample_event)
     print("\nResult output:")
     print(json.dumps(result, indent=2))
+
