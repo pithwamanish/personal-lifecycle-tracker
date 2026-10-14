@@ -120,7 +120,7 @@ jobs:
 
       - name: Run Playwright End-to-End Tests
         run: |
-          docker compose run --rm e2e
+          docker compose up --exit-code-from e2e e2e
 
       - name: Dump Compose Logs on Failure
         if: failure()
