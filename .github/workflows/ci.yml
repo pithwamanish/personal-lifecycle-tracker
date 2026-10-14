@@ -91,6 +91,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Ensure Docker Network Exists
+        run: |
+          docker network inspect personal-lifecycle-observability-net >/dev/null 2>&1 || docker network create personal-lifecycle-observability-net
+
+      - name: Build Frontend Image
+        run: |
+          docker compose build frontend
+
       - name: Run Semgrep OSS SAST Analysis
         run: |
           docker run --rm -v ${{ github.workspace }}:/src returntocorp/semgrep semgrep --config=p/python --config=p/secrets --config=p/jwt --error /src/backend
