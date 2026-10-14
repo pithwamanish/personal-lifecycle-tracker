@@ -33,7 +33,7 @@ services:
       APP_ENV: "${APP_ENV:-production}"
       APP_VERSION: "${APP_VERSION:-1.0.0}"
       OTEL_SERVICE_NAME: "api-backend"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-http://personal-lifecycle-otel-collector:4318}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
       OTEL_RESOURCE_ATTRIBUTES: "service.name=api-backend,deployment.environment=${APP_ENV:-production},service.version=${APP_VERSION:-1.0.0}"
     networks:
       - default
@@ -42,7 +42,7 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -80,4 +80,5 @@ networks:
   default:
   observability-net:
     name: ${OBSERVABILITY_NET:-personal-lifecycle-observability-net}
+    external: true
 

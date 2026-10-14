@@ -456,7 +456,7 @@ jobs:
             echo ">>> Skipping external domain healthcheck poll. Deployment trigger succeeded."
             exit 0
           else
-            HEALTH_URL="http://localhost:8088/health"
+            HEALTH_URL="http://127.0.0.1:8088/health"
           fi
 
           echo "================================================================"
