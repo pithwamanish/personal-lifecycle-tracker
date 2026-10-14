@@ -166,11 +166,13 @@ jobs:
         if: inputs.skip_tests != true
         run: |
           echo "Starting Compose Stack for PostgreSQL integration tests..."
-          docker compose up -d db backend
+          docker compose up -d db backend frontend
           echo "Waiting for database container to become healthy..."
           timeout 60s bash -c 'until docker compose ps db | grep -q "healthy"; do sleep 2; done'
           echo "Waiting for backend container to become healthy..."
           timeout 60s bash -c 'until docker compose ps backend | grep -q "healthy"; do sleep 2; done'
+          echo "Waiting for frontend container to become healthy..."
+          timeout 60s bash -c 'until docker compose ps frontend | grep -q "healthy"; do sleep 2; done'
           docker compose run --rm -T -e INTEGRATION_BACKEND_URL=http://personal-lifecycle-tracker-backend:8000 backend pytest tests/integration -v
           docker compose down -v
 
