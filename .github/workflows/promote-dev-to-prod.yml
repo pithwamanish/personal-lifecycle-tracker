@@ -107,6 +107,9 @@ jobs:
           git merge --abort || true
           echo "Pre-merge check passed cleanly: zero merge conflicts detected."
 
+          # Switch working directory to source branch to validate incoming code
+          git checkout "origin/${{ inputs.source_branch }}"
+
           # Extract commit changelog
           if [ "$COMMITS_COUNT" -gt 0 ]; then
             CHANGELOG=$(git log --pretty=format:"- %h %s (%an, %cd)" --date=short "origin/${{ inputs.target_branch }}..origin/${{ inputs.source_branch }}")
@@ -156,8 +159,10 @@ jobs:
         run: |
           echo "Starting Compose Stack for PostgreSQL integration tests..."
           docker compose up -d db backend
-          echo "Waiting for backend healthiness..."
-          timeout 60s bash -c 'until curl -fsS http://127.0.0.1:8003/health > /dev/null 2>&1; do sleep 2; done'
+          echo "Waiting for database container to become healthy..."
+          timeout 60s bash -c 'until docker compose ps db | grep -q "healthy"; do sleep 2; done'
+          echo "Waiting for backend container to become healthy..."
+          timeout 60s bash -c 'until docker compose ps backend | grep -q "healthy"; do sleep 2; done'
           docker compose run --rm -T -e INTEGRATION_BACKEND_URL=http://personal-lifecycle-tracker-backend:8000 backend pytest tests/integration -v
           docker compose down -v
 
@@ -492,6 +497,12 @@ jobs:
           echo "Frontend Image: $PROD_FRONTEND"
           echo "================================================================"
 
+          if [ -z "${{ steps.login-ecr.outputs.registry }}" ] && (! docker image inspect "$PROD_BACKEND" >/dev/null 2>&1 || ! docker image inspect "$PROD_FRONTEND" >/dev/null 2>&1); then
+            echo "Notice: Building container images on deploy runner..."
+            BACKEND_IMAGE="$PROD_BACKEND" FRONTEND_IMAGE="$PROD_FRONTEND" \
+              docker compose -f docker-compose.prod.yml build
+          fi
+
           BACKEND_IMAGE="$PROD_BACKEND" FRONTEND_IMAGE="$PROD_FRONTEND" \
             docker compose -f docker-compose.prod.yml up -d --no-build
 
@@ -566,7 +577,7 @@ jobs:
             echo ">>> Skipping external domain healthcheck poll. Deployment trigger succeeded."
             exit 0
           else
-            HEALTH_URL="http://localhost:8088/health"
+            HEALTH_URL="http://127.0.0.1:8088/health"
           fi
 
           echo "================================================================"
