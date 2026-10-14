@@ -10,7 +10,7 @@ test.describe('Accounts & Authentication Flow (@spec.md Decision 3, 23)', () => 
     await page.goto('/');
 
     // Verify wordmark
-    await expect(page.locator('text=Lifecycle Tracker')).toBeVisible();
+    await expect(page.locator('text=Lifecycle Tracker').first()).toBeVisible();
 
     // Verify default user Alex Taylor is loaded
     await expect(page.locator('header').getByText('Alex Taylor')).toBeVisible();
