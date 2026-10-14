@@ -88,11 +88,16 @@ make on-call-poll
 - `ALERT_API_URL` or `PROMETHEUS_URL`: Override default Prometheus endpoint (default: `http://localhost:9091/api/v1/alerts`).
 - `ALERT_POLL_INTERVAL` or `POLL_INTERVAL`: Override default polling interval (default: `60`).
 
+### Automated CI/CD Failure Detection (Dual-Channel)
+The on-call system ingests CI/CD failures via two automated mechanisms without manual human intervention:
+1. **Pull-Based (Continuous Poller)**: `poll-alerts.py` automatically queries GitHub Actions runs via `gh` CLI in every 60s cycle. When a workflow run fails on active branches, it generates `_docs/incidents/incident-<id>.json` and dispatches the agent immediately.
+2. **Push-Based (Real-Time in CI)**: `.github/workflows/ci.yml` contains a dedicated `notify-on-call` job (`if: failure()`). Whenever ANY job in the workflow fails, it runs automatically and feeds the incident payload directly into `on-call-engineer/scripts/receive-alert`.
+
 ---
 
 ## 4. Headless Coding Agent Dispatch
 
-When an alert enters the `firing` state:
+When an alert enters the `firing` state (from either Prometheus or GitHub Actions CI/CD):
 1. **Normalization**: The raw alert labels and annotations are extracted and structured according to [`payload-schema.json`](payload-schema.json).
 2. **Persistence**:
    - Incident data: `_docs/incidents/incident-<timestamp>-<alert_name>.json`
@@ -101,7 +106,7 @@ When an alert enters the `firing` state:
    - **Antigravity CLI**: If `agy` is installed, runs `agy --prompt "$(cat prompt.md)"`.
    - **Claude Code**: If `claude` is installed, runs `claude -p "$(cat prompt.md)"`.
    - **Autonomous Headless Responder**: If running headless in container/CI, runs the autonomous triage loop: gathers evidence via `collect-evidence`, verifies against `authorize-action`, logs the session, and prepares a repro test.
-4. **Resolution Tracking**: When the alert recovers and is no longer returned as firing, the poller logs `ALERT_RESOLVED` and clears the alert fingerprint.
+4. **Resolution Tracking**: When the alert recovers and is no longer returned as firing (or when the subsequent CI run passes), the poller logs `ALERT_RESOLVED` and clears the alert fingerprint.
 
 ---
 
