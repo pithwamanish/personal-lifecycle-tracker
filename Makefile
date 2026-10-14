@@ -1,29 +1,32 @@
-.PHONY: dev build test test-backend test-frontend test-integration test-e2e lint down clean logs ps ci-validate promote-validate obs-up obs-down obs-ps obs-logs
+.PHONY: dev build test test-backend test-frontend test-integration test-e2e lint down clean logs ps ci-validate promote-validate obs-up obs-down obs-ps obs-logs network-init
 
-dev:
+network-init:
+	@docker network inspect personal-lifecycle-observability-net >/dev/null 2>&1 || docker network create personal-lifecycle-observability-net
+
+dev: network-init
 	docker compose up --build
 
-up:
+up: network-init
 	docker compose up -d --build
 
-build:
+build: network-init
 	docker compose build
 
 test: test-backend test-frontend test-integration test-e2e
 
-test-backend:
+test-backend: network-init
 	docker compose run --rm backend pytest tests -m "not integration"
 
-test-integration:
+test-integration: network-init
 	docker compose run --rm backend pytest tests/integration -v
 
-test-frontend:
+test-frontend: network-init
 	docker compose run --rm frontend npm test
 
-test-e2e:
+test-e2e: network-init
 	docker compose run --rm -T e2e
 
-lint:
+lint: network-init
 	docker compose run --rm frontend npm run lint
 
 ps:
@@ -32,7 +35,7 @@ ps:
 db-shell:
 	docker compose exec db psql -U postgres -d lifecycle
 
-test-postgres:
+test-postgres: network-init
 	docker compose run --rm -e DATABASE_URL=postgresql://postgres:postgres@db:5432/lifecycle backend pytest
 
 logs:

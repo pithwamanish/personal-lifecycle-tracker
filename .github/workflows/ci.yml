@@ -44,13 +44,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Ensure Docker Network Exists
+        run: |
+          docker network inspect personal-lifecycle-observability-net >/dev/null 2>&1 || docker network create personal-lifecycle-observability-net
+
       - name: Build Backend Image
         run: |
           docker compose build backend
 
       - name: Run Backend Unit Tests (Pytest)
         run: |
-          docker compose run --rm --no-deps backend pytest tests -m "not integration" -v
+          docker compose run --rm -T --no-deps backend pytest tests -m "not integration" -v
 
   # ===========================================================================
   # 1. PARALLEL TESTS: Frontend Lint & Vitest Suite
@@ -65,13 +69,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Ensure Docker Network Exists
+        run: |
+          docker network inspect personal-lifecycle-observability-net >/dev/null 2>&1 || docker network create personal-lifecycle-observability-net
+
       - name: Build Frontend Image
         run: |
           docker compose build frontend
 
       - name: Run Frontend Lint & Vitest Unit Tests
         run: |
-          docker compose run --rm --no-deps frontend sh -c "npm run lint && npm test"
+          docker compose run --rm -T --no-deps frontend sh -c "npm run lint && npm test"
 
   # ===========================================================================
   # 2. DOCKER COMPOSE STACK: Integration & End-to-End Tests
@@ -86,6 +94,10 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Ensure Docker Network Exists
+        run: |
+          docker network inspect personal-lifecycle-observability-net >/dev/null 2>&1 || docker network create personal-lifecycle-observability-net
 
       - name: Build Docker Compose Services
         run: |
@@ -104,11 +116,11 @@ jobs:
 
       - name: Run PostgreSQL Integration Tests
         run: |
-          docker compose run --rm backend pytest tests/integration -v
+          docker compose run --rm -T backend pytest tests/integration -v
 
       - name: Run Playwright End-to-End Tests
         run: |
-          docker compose run --rm e2e
+          docker compose run --rm -T e2e
 
       - name: Tear Down Compose Stack
         if: always()
@@ -319,6 +331,10 @@ jobs:
         if: steps.oidc-auth.outcome == 'success'
         continue-on-error: true
         uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Ensure Docker Network Exists
+        run: |
+          docker network inspect personal-lifecycle-observability-net >/dev/null 2>&1 || docker network create personal-lifecycle-observability-net
 
       # Pull images from registry and serve them
       - name: Pull Image from Registry & Serve (Zero Host Build)
