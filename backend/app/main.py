@@ -26,15 +26,19 @@ def create_app() -> FastAPI:
 
     raw_origins = os.getenv("CORS_ORIGINS", "")
     origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+    is_lambda = bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME") or os.getenv("AWS_EXECUTION_ENV"))
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=origins if origins else ["*"],
-        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    # In AWS Lambda, the Lambda Function URL natively attaches CORS headers.
+    # Avoid duplicate headers unless specific origins are explicitly configured.
+    if not is_lambda or raw_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins if origins else ["*"],
+            allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
