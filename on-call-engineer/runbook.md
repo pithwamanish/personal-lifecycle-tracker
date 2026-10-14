@@ -88,3 +88,63 @@ This runbook guides automated and human on-call engineers triaging alerts emitte
 - **Action**:
   1. Inspect validation errors in backend logs: `docker compose logs backend | grep -E "(422|500)"`.
   2. Verify payload matches `contracts/openapi.yaml` schema for `LifecycleItemCreate`.
+
+---
+
+## 3. GitHub Actions CI/CD Triage Guides
+
+### `CiCdSecurityAuditFailed`
+- **Severity**: Critical
+- **Trigger**: GitHub Actions `security-audit` job fails on a PR or commit.
+- **Likely Causes**:
+  - Semgrep SAST detected high-risk vulnerability (e.g. wildcard CORS, hardcoded secret pattern, insecure JWT algorithm).
+  - `npm audit` detected high or critical CVE in frontend dependencies.
+- **Action**:
+  1. Reproduce deterministic SAST scan locally inside Docker:
+     ```bash
+     make security-audit
+     ```
+  2. Inspect specific file and line flagged by Semgrep.
+  3. Apply minimal security remediation (e.g. restrict origins, update dependencies).
+  4. Verify scan passes with 0 findings: `make security-audit`.
+  5. **Negative Invariant**: Agent is **STRICTLY FORBIDDEN** from solving this by disabling Semgrep rules, adding `--no-verify`, or suppressing `--audit-level`.
+
+### `CiCdTestJobFailed`
+- **Severity**: Critical
+- **Trigger**: GitHub Actions `test-backend` or `test-frontend` job fails.
+- **Likely Causes**:
+  - Regression in business logic, broken model validation, or broken test assertion.
+  - Asynchronous timing or unhandled promise rejection in Vitest.
+- **Action**:
+  1. Reproduce failure locally inside container without host pollution:
+     ```bash
+     make test-backend
+     # or: make test-frontend
+     ```
+  2. Write/inspect reproducing test case.
+  3. Implement minimal safe correction and verify all tests pass: `make test`.
+
+### `CiCdBuildFailed`
+- **Severity**: Critical
+- **Trigger**: Docker image build stage fails in CI runner.
+- **Likely Causes**:
+  - Outdated base image tag, missing Linux compilation dependency, or broken multi-stage target.
+- **Action**:
+  1. Reproduce container build locally:
+     ```bash
+     docker compose build --no-cache
+     ```
+  2. Fix Dockerfile syntax or pin dependencies in `requirements.txt` / `package.json`.
+
+### `CiCdWorkflowSyntaxError`
+- **Severity**: Warning
+- **Trigger**: Invalid YAML syntax or deprecated GitHub Actions runner/action.
+- **Likely Causes**:
+  - Misaligned indentation, invalid `${{ ... }}` expression, or deprecated action tag.
+- **Action**:
+  1. Validate workflow locally via `act`:
+     ```bash
+     make ci-validate
+     ```
+  2. Correct syntax and confirm dry-run passes cleanly.
+
