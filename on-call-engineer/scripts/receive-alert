@@ -16,6 +16,36 @@ ON_CALL_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 PROJECT_ROOT = os.path.abspath(os.path.join(ON_CALL_DIR, ".."))
 
 def normalize_alert_payload(raw_data):
+    # Check if raw_data is a GitHub Actions workflow_run payload
+    if isinstance(raw_data, dict) and "workflow_run" in raw_data:
+        wf = raw_data["workflow_run"]
+        conclusion = wf.get("conclusion", "failure")
+        state = "firing" if conclusion in ["failure", "timed_out", "action_required"] else "resolved"
+        head_sha = wf.get("head_sha", "dev-latest")
+        short_sha = head_sha[:7] if head_sha else "latest"
+        run_id = wf.get("id", "unknown")
+        wf_name = wf.get("name", "CI/CD Pipeline")
+        branch = wf.get("head_branch", "dev")
+
+        return {
+            "alert_name": f"CiCdJobFailed_{re.sub(r'[^a-zA-Z0-9_]', '_', wf_name)}",
+            "alert_state": state,
+            "severity": "critical" if state == "firing" else "info",
+            "service_name": wf_name,
+            "deployment_environment": branch,
+            "service_version": short_sha,
+            "summary": f"GitHub Actions {wf_name} failed on branch {branch} (run #{run_id})",
+            "description": f"CI/CD run {run_id} terminated with conclusion '{conclusion}'. Inspect logs: gh run view {run_id} --log-failed",
+            "observed_value": conclusion,
+            "threshold": "success",
+            "duration": "instant",
+            "dashboard_url": wf.get("html_url", f"https://github.com/pithwamanish/personal-lifecycle-tracker/actions/runs/{run_id}"),
+            "runbook_url": "on-call-engineer/runbook.md#3-github-actions-cicd-triage-guides",
+            "timestamp": wf.get("updated_at", datetime.now(timezone.utc).isoformat()),
+            "labels": {"source": "github_actions", "run_id": str(run_id), "branch": str(branch)},
+            "annotations": {"url": wf.get("html_url", ""), "commit": str(head_sha)}
+        }
+
     # Check if raw_data is Prometheus / Alertmanager format with "alerts" array
     if "alerts" in raw_data and isinstance(raw_data["alerts"], list) and len(raw_data["alerts"]) > 0:
         alert = raw_data["alerts"][0]
