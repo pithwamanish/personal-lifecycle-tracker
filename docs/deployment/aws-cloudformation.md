@@ -1,24 +1,24 @@
-# Deploying Personal Lifecycle Tracker to AWS via CloudFormation
+# Deploying Personal Lifecycle Tracker to AWS via CloudFormation (Serverless)
 
-This guide covers deploying the **Personal Lifecycle Tracker** to Amazon Web Services using **AWS CloudFormation** across two independent environments:
-1. **Development Environment (`dev`)**: [`cloudformation/aws-ec2-compose.yaml`](../../cloudformation/aws-ec2-compose.yaml) — Default environment `dev`, isolated VPC CIDR `10.1.0.0/16`.
-2. **Production Environment Copy (`production`)**: [`cloudformation/aws-ec2-compose-prod.yaml`](../../cloudformation/aws-ec2-compose-prod.yaml) — Default environment `production`, isolated VPC CIDR `10.0.0.0/16`.
+This guide covers deploying the **Personal Lifecycle Tracker** to Amazon Web Services using **AWS CloudFormation** across two independent serverless environments:
+1. **Development Environment (`dev`)**: [`cloudformation/aws-serverless-lambda.yaml`](../../cloudformation/aws-serverless-lambda.yaml) — Default environment `dev`, 100% serverless with Lambda + S3 + CloudFront + SNS on-call responder.
+2. **Production Environment Copy (`production`)**: [`cloudformation/aws-serverless-lambda-prod.yaml`](../../cloudformation/aws-serverless-lambda-prod.yaml) — Default environment `production`, independent copy with CloudWatch alarms and automated on-call responder.
 
-Both templates deploy self-contained, Free-Tier eligible infrastructure stacks without needing external tools or Terraform state management.
+Both templates deploy self-contained, Free-Tier eligible infrastructure stacks with **zero EC2 instances, zero servers to maintain, and $0.00/month idle cost**.
 
 ---
 
 ## Comparison Matrix
 
-| Property | Development (`aws-ec2-compose.yaml`) | Production (`aws-ec2-compose-prod.yaml`) |
+| Property | Development (`aws-serverless-lambda.yaml`) | Production (`aws-serverless-lambda-prod.yaml`) |
 |---|---|---|
 | **Default Stack Name** | `personal-lifecycle-tracker-dev` | `personal-lifecycle-tracker-prod` |
 | **Environment Parameter** | `dev` | `production` |
-| **VPC CIDR** | `10.1.0.0/16` | `10.0.0.0/16` |
-| **Subnet CIDR** | `10.1.1.0/24` | `10.0.1.0/24` |
-| **Instance Type** | `t3.micro` | `t3.micro` (or `t3.small`) |
-| **Default Branch** | `main` (or `dev`) | `main` |
-| **App Port** | `80` (or `8088`) | `80` |
+| **Backend Compute** | AWS Lambda Function URL (`512 MB`) | AWS Lambda Function URL (`512 MB`) |
+| **Frontend CDN** | CloudFront CDN + Private S3 Origin (OAC) | CloudFront CDN + Private S3 Origin (OAC) |
+| **Database** | Neon Serverless PostgreSQL (over TLS) | Neon Serverless PostgreSQL (over TLS) |
+| **On-Call Incident Responder** | Amazon SNS + Lambda Responder Function | Amazon SNS + Lambda Responder Function |
+| **Idle Cost** | **$0.00 / month** | **$0.00 / month** |
 
 ---
 
@@ -32,16 +32,15 @@ Both templates deploy self-contained, Free-Tier eligible infrastructure stacks w
    - Under *Prerequisite - Prepare template*, choose **"Choose an existing template"**.
    - Under *Template source*, choose **"Upload a template file"**.
    - Select:
-     - For Dev: [`cloudformation/aws-ec2-compose.yaml`](../../cloudformation/aws-ec2-compose.yaml)
-     - For Production: [`cloudformation/aws-ec2-compose-prod.yaml`](../../cloudformation/aws-ec2-compose-prod.yaml)
+     - For Dev: [`cloudformation/aws-serverless-lambda.yaml`](../../cloudformation/aws-serverless-lambda.yaml)
+     - For Production: [`cloudformation/aws-serverless-lambda-prod.yaml`](../../cloudformation/aws-serverless-lambda-prod.yaml)
    - Click **Next**.
 
 3. **Specify Stack Details**:
    - **Stack name**: `personal-lifecycle-tracker-dev` (or `personal-lifecycle-tracker-prod`)
    - **Environment**: `dev` or `production`
-   - **InstanceType**: `t3.micro`
-   - **AllowedCIDR**: `0.0.0.0/0`
-   - **AppPort**: `80`
+   - **DatabaseUrl**: Your Neon serverless postgres pooled connection string
+   - **SecretKey**: Secure JWT signing key (at least 32 characters)
    - Click **Next**.
 
 4. **Review and Acknowledge**:
@@ -50,68 +49,21 @@ Both templates deploy self-contained, Free-Tier eligible infrastructure stacks w
 
 ---
 
-## Deployment Option 2: AWS CLI
+## Deployment Option 2: Containerized Makefile Validation & Deployment
 
-### Deploy Dev Environment:
-```bash
-aws cloudformation create-stack \
-  --stack-name personal-lifecycle-tracker-dev \
-  --template-body file://cloudformation/aws-ec2-compose.yaml \
-  --parameters \
-      ParameterKey=Environment,ParameterValue=dev \
-      ParameterKey=VpcCidr,ParameterValue=10.1.0.0/16 \
-      ParameterKey=SubnetCidr,ParameterValue=10.1.1.0/24 \
-      ParameterKey=InstanceType,ParameterValue=t3.micro \
-      ParameterKey=AppPort,ParameterValue=80 \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
-```
-
-### Deploy Production Environment Copy:
-```bash
-aws cloudformation create-stack \
-  --stack-name personal-lifecycle-tracker-prod \
-  --template-body file://cloudformation/aws-ec2-compose-prod.yaml \
-  --parameters \
-      ParameterKey=Environment,ParameterValue=production \
-      ParameterKey=VpcCidr,ParameterValue=10.0.0.0/16 \
-      ParameterKey=SubnetCidr,ParameterValue=10.0.1.0/24 \
-      ParameterKey=InstanceType,ParameterValue=t3.micro \
-      ParameterKey=AppPort,ParameterValue=80 \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
-```
-
----
-
-## Access & Maintenance
-
-### 1. Connecting to Server Shell via AWS Systems Manager
-```bash
-# Connect to Dev EC2
-aws ssm start-session \
-  --target $(aws cloudformation describe-stacks --stack-name personal-lifecycle-tracker-dev --query "Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue" --output text --region us-east-1) \
-  --region us-east-1
-
-# Connect to Production EC2
-aws ssm start-session \
-  --target $(aws cloudformation describe-stacks --stack-name personal-lifecycle-tracker-prod --query "Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue" --output text --region us-east-1) \
-  --region us-east-1
-```
-
-### 2. Inspecting Running Containers on Host
-```bash
-sudo docker compose -f /opt/personal-lifecycle-tracker/docker-compose.prod.yml ps
-```
-
----
-
-## Tear Down Stacks
+In accordance with the **Zero-Host-Runtime Mandate**, validate and deploy inside Docker without host dependencies:
 
 ```bash
-# Destroy Dev
-aws cloudformation delete-stack --stack-name personal-lifecycle-tracker-dev --region us-east-1
+# Validate both dev and prod CloudFormation templates
+make cf-validate
 
-# Destroy Production
-aws cloudformation delete-stack --stack-name personal-lifecycle-tracker-prod --region us-east-1
+# Deploy Dev Environment via CloudFormation
+make cf-deploy-dev
+
+# Deploy Production Environment via CloudFormation
+make cf-deploy-prod
+
+# Check Stack Deployment Status
+make cf-status-dev
+make cf-status-prod
 ```

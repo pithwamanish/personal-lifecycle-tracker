@@ -28,12 +28,24 @@ def create_app() -> FastAPI:
     origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
     is_lambda = bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME") or os.getenv("AWS_EXECUTION_ENV"))
 
+    default_dev_origins = [
+        "http://localhost:3000",
+        "http://localhost:3003",
+        "http://localhost:8000",
+        "http://localhost:8003",
+        "http://localhost:8088",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3003",
+        "http://127.0.0.1:8088",
+    ]
+    allowed_origins = origins if origins else default_dev_origins
+
     # In AWS Lambda, the Lambda Function URL natively attaches CORS headers.
     # Avoid duplicate headers unless specific origins are explicitly configured.
     if not is_lambda or raw_origins:
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=origins if origins else ["*"],
+            allow_origins=allowed_origins,
             allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
             allow_credentials=True,
             allow_methods=["*"],

@@ -1,0 +1,33 @@
+# AWS Controllers for Kubernetes (ACK) CustomResource Definition
+# Demonstrates declarative management of AWS Lambda from a Kubernetes cluster
+# without running expensive EKS control planes ($0 on Kind / Local Kubernetes).
+apiVersion: lambda.services.k8s.aws/v1alpha1
+kind: Function
+metadata:
+  name: personal-lifecycle-tracker-api
+  namespace: default
+  labels:
+    app.kubernetes.io/name: personal-lifecycle-tracker-api
+    app.kubernetes.io/managed-by: ack-lambda-controller
+    app.kubernetes.io/part-of: personal-lifecycle-tracker
+spec:
+  name: personal-lifecycle-tracker-api-dev
+  description: "Personal Lifecycle Tracker FastAPI Backend managed by Kubernetes ACK"
+  packageType: Image
+  code:
+    imageURI: "123456789012.dkr.ecr.us-east-1.amazonaws.com/personal-lifecycle-tracker-backend:latest"
+  role: "arn:aws:iam::123456789012:role/personal-lifecycle-tracker-lambda-exec-dev"
+  memorySize: 512
+  timeout: 60
+  tracingConfig:
+    mode: Active
+  environment:
+    variables:
+      APP_ENV: "dev"
+      PORT: "8000"
+      PYTHONUNBUFFERED: "1"
+      AWS_LWA_INVOKE_MODE: "buffered"
+  tags:
+    Project: "personal-lifecycle-tracker"
+    Environment: "dev"
+    Orchestration: "Kubernetes-ACK"

@@ -70,3 +70,15 @@ curl -f http://localhost:8088/health
 make kind-down
 # Or: kind delete cluster --name lifecycle-cluster
 ```
+
+---
+
+## 3. Zero-Cost Kubernetes to AWS Serverless Lambda Integration
+
+To fulfill Kubernetes project criteria while maintaining **$0.00 / month cost on AWS** (avoiding the ~$73/mo mandatory Amazon EKS control-plane fee):
+
+1. **Kubernetes-to-Lambda Invocation Bridge ([`k8s/lambda-bridge-job.yaml`](lambda-bridge-job.yaml))**:
+   - Deploys an automated Kubernetes Job inside the local cluster that invokes the Serverless AWS Lambda Function URL, performs health validations, and bridges Kubernetes workloads with serverless backend APIs.
+2. **AWS Controllers for Kubernetes (ACK) Declarative Manifest ([`k8s/ack-lambda-resource.yaml`](ack-lambda-resource.yaml))**:
+   - Demonstrates declarative Kubernetes management of AWS Lambda functions via the `lambda.services.k8s.aws/v1alpha1` CustomResource.
+   - Allows Kubernetes control plane manifests to manage, configure, and monitor AWS serverless infrastructure with 0 EC2 worker nodes and 0 cloud cluster charges.

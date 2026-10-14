@@ -82,11 +82,29 @@ jobs:
           docker compose run --rm -T --no-deps frontend sh -c "npm run lint && npm test"
 
   # ===========================================================================
+  # 1. PARALLEL TESTS: Deterministic Security Audit (Semgrep SAST & npm audit)
+  # ===========================================================================
+  security-audit:
+    name: Security Audit (Semgrep SAST & Audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep OSS SAST Analysis
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/src returntocorp/semgrep semgrep --config=p/python --config=p/secrets --config=p/jwt --error /src/backend
+
+      - name: Run Frontend Security Audit
+        run: |
+          docker compose run --rm -T --no-deps frontend npm audit --audit-level=high
+
+  # ===========================================================================
   # 2. DOCKER COMPOSE STACK: Integration & End-to-End Tests
   # ===========================================================================
   integration-and-e2e:
     name: Compose Stack (Integration & E2E Tests)
-    needs: [test-backend, test-frontend]
+    needs: [test-backend, test-frontend, security-audit]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

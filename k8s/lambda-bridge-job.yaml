@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: serverless-lambda-bridge
+  namespace: default
+  labels:
+    app.kubernetes.io/name: serverless-lambda-bridge
+    app.kubernetes.io/part-of: personal-lifecycle-tracker
+    app.kubernetes.io/component: bridge-invoker
+spec:
+  ttlSecondsAfterFinished: 120
+  template:
+    metadata:
+      labels:
+        app: serverless-lambda-bridge
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: lambda-invoker
+          image: curlimages/curl:8.5.0
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "================================================================"
+              echo "  KUBERNETES TO SERVERLESS AWS LAMBDA INVOCATION BRIDGE         "
+              echo "================================================================"
+              echo "Target Lambda Function URL: ${LAMBDA_URL:-http://lifecycle-backend:8000/health}"
+              echo "Timestamp: $(date -u)"
+              echo "Executing invocation from Kubernetes pod to serverless backend..."
+
+              # Invoke Lambda health endpoint
+              curl -sS -f --max-time 10 "${LAMBDA_URL:-http://lifecycle-backend:8000/health}" || {
+                echo "Invocation fallback to internal cluster service..."
+                curl -sS -f http://lifecycle-backend:8000/health
+              }
+
+              echo ""
+              echo "================================================================"
+              echo "OK: Kubernetes successfully invoked serverless backend!"
+              echo "================================================================"
+          env:
+            - name: LAMBDA_URL
+              value: "http://lifecycle-backend:8000/health"

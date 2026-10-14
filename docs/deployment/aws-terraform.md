@@ -1,49 +1,36 @@
-# Deploying Personal Lifecycle Tracker to AWS via Terraform
+# Deploying Personal Lifecycle Tracker to AWS via Terraform (Serverless)
 
-This guide covers deploying the **Personal Lifecycle Tracker** to Amazon Web Services (AWS) using **Terraform** across two independent environments:
-1. **Development (`dev`)**: Located in [`terraform/aws/`](../../terraform/aws/), default environment `dev`, isolated VPC CIDR `10.1.0.0/16`.
-2. **Production (`production`)**: Located in [`terraform/aws-prod/`](../../terraform/aws-prod/), default environment `production`, isolated VPC CIDR `10.0.0.0/16`.
+This guide covers deploying the **Personal Lifecycle Tracker** to Amazon Web Services (AWS) using **Terraform** across two independent serverless environments:
+1. **Development (`dev`)**: Located in [`terraform/aws/`](../../terraform/aws/), default environment `dev`.
+2. **Production (`production`)**: Located in [`terraform/aws-prod/`](../../terraform/aws-prod/), default environment `production`.
 
-Each environment is provisioned as an isolated, Free-Tier eligible Amazon EC2 instance running the multi-container Docker Compose stack (`docker-compose.prod.yml`) with automated reverse proxying managed by Caddy 2.
+Each environment is provisioned as a 100% serverless, zero-maintenance, zero-EC2 architecture backed by **AWS Lambda**, **Amazon S3**, **AWS CloudFront**, and **Amazon SNS on-call incident responder**.
 
 ---
 
-## AWS Architecture Overview
+## AWS Serverless Architecture Overview
 
 ```mermaid
 flowchart TD
-    Internet((Internet / User)) -->|HTTP :80 / HTTPS :443| IGW[Internet Gateway]
-    IGW --> VPC[Isolated VPC: 10.1.0.0/16 (Dev) or 10.0.0.0/16 (Prod)]
-    VPC --> Subnet[Public Subnet: 10.1.1.0/24 (Dev) or 10.0.1.0/24 (Prod)]
-    Subnet --> SG[Security Group: 80, 443, 8088, 22]
-    SG --> EIP[Elastic IP]
-    EIP --> EC2["EC2 Instance (t3.micro - Free Tier)"]
+    Internet((Internet / User)) -->|HTTPS| CF[AWS CloudFront CDN Edge]
     
-    subgraph EC2["EC2 Instance"]
-        SSM["AWS SSM Agent (No SSH Key Required)"]
-        Docker["Docker Engine & Compose Plugin"]
-        Systemd["systemd service: personal-lifecycle-tracker"]
-        
-        subgraph Containers["Docker Compose Network"]
-            Caddy["Frontend Service (Caddy 2 + React 19) :80"]
-            Backend["Backend Service (FastAPI) :8000"]
-            DB[("PostgreSQL 16 :5432")]
-            
-            Caddy -->|/api & /health| Backend
-            Backend --> DB
-        end
+    CF -->|/* (Static React UI)| S3[Private Amazon S3 Bucket via OAC]
+    CF -->|/api/* & /health| LURL[AWS Lambda Function URL]
+    LURL --> Backend["FastAPI Backend Lambda (Container / LWA)"]
+    Backend --> Neon[("Neon Serverless PostgreSQL (over TLS)")]
+    
+    subgraph Observability["Incident Response & On-Call"]
+        CW[CloudWatch Metric Alarm: 5xx Errors] --> SNS[Amazon SNS Alert Topic]
+        SNS --> OnCallLambda["On-Call Incident Responder Lambda"]
+        OnCallLambda -->|Level 1: Auto Rollback / Restart| Backend
     end
 ```
 
 ### Key Architectural Invariants
-1. **Complete Environment Independence**:
-   - Dev VPC CIDR: `10.1.0.0/16`, Subnet: `10.1.1.0/24`.
-   - Production VPC CIDR: `10.0.0.0/16`, Subnet: `10.0.1.0/24`.
-   - Non-overlapping CIDRs prevent IP collisions and allow cross-environment VPC peering if needed.
-2. **Shared AWS Account OIDC Safety**: Both modules support `existing_oidc_provider_arn` to prevent duplicate GitHub Actions OIDC provider conflicts when deployed into the same AWS account.
-3. **Free-Tier Eligible**: Runs on `t3.micro` or `t4g.micro` with 20 GB GP3 encrypted storage ($0/month under AWS Free Tier).
-4. **Zero Open SSH Ports Needed**: Comes pre-configured with an IAM Role with `AmazonSSMManagedInstanceCore` for AWS Systems Manager Session Manager access.
-5. **Amazon ECR Container Registry Integration**: Includes declarative ECR repositories (`personal-lifecycle-tracker-backend` and `personal-lifecycle-tracker-frontend`) with scan-on-push and automated lifecycle retention policies. EC2 instance profiles include `AmazonEC2ContainerRegistryReadOnly` so hosts pull pre-built images and serve them without host compilation.
+1. **Zero EC2 Instances**: Eliminates VM management, OS patch cycles, SSH keys, and idle instance charges.
+2. **100% Free-Tier & Zero Idle Cost**: Leverages AWS Lambda (1M free requests/mo), CloudFront (1 TB/mo free), S3 (5 GB free), and EventBridge (14M triggers/mo free) for $0.00/month idle cost.
+3. **Automated Incident Response**: Includes an Amazon SNS topic wired directly to an on-call responder Lambda function with code-enforced autonomy policy authorization.
+4. **Keyless Cloud Authentication**: Integrates GitHub Actions OpenID Connect (OIDC) roles (`id-token: write`), eliminating hardcoded AWS credentials.
 
 ---
 
@@ -52,94 +39,25 @@ flowchart TD
 ### 1. Development Environment (`terraform/aws/`)
 
 ```bash
-# Validate Dev configuration
+# Validate Dev configuration inside Docker
 make tf-validate-aws
 
 # Generate execution plan for Dev
 make tf-plan-aws
 
-# Apply Dev infrastructure
+# Apply execution plan to AWS
 make tf-apply-aws
 ```
 
-Variables are configured in `terraform/aws/terraform.tfvars.dev`:
-```hcl
-aws_region   = "us-east-1"
-project_name = "personal-lifecycle-tracker"
-environment  = "dev"
-vpc_cidr     = "10.1.0.0/16"
-subnet_cidr  = "10.1.1.0/24"
-instance_type= "t3.micro"
-app_port     = 80
-repo_branch  = "main"
-```
-
----
-
-### 2. Production Environment Copy (`terraform/aws-prod/`)
+### 2. Production Environment (`terraform/aws-prod/`)
 
 ```bash
-# Validate Production configuration
+# Validate Production configuration inside Docker
 make tf-validate-aws-prod
 
 # Generate execution plan for Production
 make tf-plan-aws-prod
 
-# Apply Production infrastructure
+# Apply execution plan to AWS
 make tf-apply-aws-prod
-```
-
-Variables are configured in `terraform/aws-prod/terraform.tfvars.prod`:
-```hcl
-aws_region   = "us-east-1"
-project_name = "personal-lifecycle-tracker"
-environment  = "production"
-vpc_cidr     = "10.0.0.0/16"
-subnet_cidr  = "10.0.1.0/24"
-instance_type= "t3.micro"
-app_port     = 80
-repo_branch  = "main"
-```
-
----
-
-## Verifying Deployment
-
-Each environment outputs:
-- `application_url`: Public HTTP entrypoint.
-- `healthcheck_url`: Public `/health` endpoint.
-- `instance_id`: EC2 Instance ID.
-- `public_ip`: Elastic IP address.
-- `ssm_session_command`: AWS CLI command to connect securely via AWS SSM.
-
-```bash
-# Test Dev health
-curl -f http://<dev_public_ip>/health
-
-# Test Production health
-curl -f http://<prod_public_ip>/health
-```
-
----
-
-## Teardown & Clean Up
-
-To destroy an environment and eliminate ongoing AWS charges:
-
-```bash
-# Destroy Dev
-docker run --rm -it \
-  -v $(PWD)/terraform/aws:/workspace \
-  -w /workspace \
-  -v $HOME/.aws:/root/.aws:ro \
-  -e AWS_PROFILE=${AWS_PROFILE:-default} \
-  hashicorp/terraform:1.7.5 destroy -var-file=terraform.tfvars.dev
-
-# Destroy Production
-docker run --rm -it \
-  -v $(PWD)/terraform/aws-prod:/workspace \
-  -w /workspace \
-  -v $HOME/.aws:/root/.aws:ro \
-  -e AWS_PROFILE=${AWS_PROFILE:-default} \
-  hashicorp/terraform:1.7.5 destroy -var-file=terraform.tfvars.prod
 ```

@@ -29,6 +29,16 @@ test-e2e: network-init
 lint: network-init
 	docker compose run --rm frontend npm run lint
 
+security-audit: network-init
+	docker run --rm -v $(CURDIR):/src returntocorp/semgrep semgrep --config=p/python --config=p/secrets --config=p/jwt --error /src/backend
+	docker compose run --rm -T --no-deps frontend npm audit --audit-level=high
+
+setup-hooks:
+	@mkdir -p .git/hooks
+	@cp scripts/pre-commit-security.sh .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "Git security pre-commit hook installed successfully."
+
 ps:
 	docker compose ps
 
@@ -174,25 +184,25 @@ tf-validate: tf-validate-aws tf-validate-aws-prod tf-validate-render tf-validate
 
 # CloudFormation Validation
 cf-validate-dev:
-	docker run --rm -v $(CURDIR)/cloudformation:/cf -v $$HOME/.aws:/root/.aws:ro -e AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION) $(AWS_CLI_IMAGE) cloudformation validate-template --template-body file:///cf/aws-ec2-compose.yaml
+	docker run --rm -v $(CURDIR)/cloudformation:/cf -v $$HOME/.aws:/root/.aws:ro -e AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION) $(AWS_CLI_IMAGE) cloudformation validate-template --template-body file:///cf/aws-serverless-lambda.yaml
 
 cf-validate-prod:
-	docker run --rm -v $(CURDIR)/cloudformation:/cf -v $$HOME/.aws:/root/.aws:ro -e AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION) $(AWS_CLI_IMAGE) cloudformation validate-template --template-body file:///cf/aws-ec2-compose-prod.yaml
+	docker run --rm -v $(CURDIR)/cloudformation:/cf -v $$HOME/.aws:/root/.aws:ro -e AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION) $(AWS_CLI_IMAGE) cloudformation validate-template --template-body file:///cf/aws-serverless-lambda-prod.yaml
 
 cf-validate: cf-validate-dev cf-validate-prod
 
 # CloudFormation Deploy & Lifecycle Targets
 CF_STACK_DEV ?= personal-lifecycle-tracker-dev
 CF_STACK_PROD ?= personal-lifecycle-tracker-prod
-AWS_DEFAULT_REGION ?= ap-south-1
+AWS_DEFAULT_REGION ?= us-east-1
 
 cf-deploy-dev:
 	docker run --rm -v $(CURDIR)/cloudformation:/cf -v $$HOME/.aws:/root/.aws:ro \
 	  -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION) \
 	  $(AWS_CLI_IMAGE) cloudformation create-stack \
 	    --stack-name $(CF_STACK_DEV) \
-	    --template-body file:///cf/aws-ec2-compose.yaml \
-	    --parameters ParameterKey=Environment,ParameterValue=dev ParameterKey=AppPort,ParameterValue=80 ParameterKey=RepoUrl,ParameterValue=https://github.com/pithwamanish/personal-lifecycle-tracker.git \
+	    --template-body file:///cf/aws-serverless-lambda.yaml \
+	    --parameters ParameterKey=Environment,ParameterValue=dev ParameterKey=ProjectName,ParameterValue=personal-lifecycle-tracker \
 	    --capabilities CAPABILITY_NAMED_IAM \
 	    --region $(AWS_DEFAULT_REGION)
 
@@ -201,8 +211,8 @@ cf-deploy-prod:
 	  -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION) \
 	  $(AWS_CLI_IMAGE) cloudformation create-stack \
 	    --stack-name $(CF_STACK_PROD) \
-	    --template-body file:///cf/aws-ec2-compose-prod.yaml \
-	    --parameters ParameterKey=Environment,ParameterValue=production ParameterKey=AppPort,ParameterValue=80 ParameterKey=RepoUrl,ParameterValue=https://github.com/pithwamanish/personal-lifecycle-tracker.git \
+	    --template-body file:///cf/aws-serverless-lambda-prod.yaml \
+	    --parameters ParameterKey=Environment,ParameterValue=production ParameterKey=ProjectName,ParameterValue=personal-lifecycle-tracker \
 	    --capabilities CAPABILITY_NAMED_IAM \
 	    --region $(AWS_DEFAULT_REGION)
 
@@ -231,6 +241,9 @@ on-call-verify:
 
 on-call-simulate-cloud:
 	bash on-call-engineer/cloud-simulator/scripts/run-cloud-simulation
+
+on-call-aws-drill:
+	bash on-call-engineer/scripts/run-aws-incident-drill
 
 # Local Kubernetes Deployment with Kind
 KIND_CLUSTER_NAME ?= lifecycle-cluster

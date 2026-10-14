@@ -1,28 +1,9 @@
 resource "aws_ecr_repository" "backend" {
-  name                 = var.ecr_backend_repository_name != null ? var.ecr_backend_repository_name : "${var.project_name}-backend-${var.environment}"
+  name                 = "${var.project_name}-backend-${var.environment}"
   image_tag_mutability = "MUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
-  }
-
-  tags = {
-    Name        = "${var.project_name}-backend-${var.environment}"
-    Environment = var.environment
-  }
-}
-
-resource "aws_ecr_repository" "frontend" {
-  name                 = var.ecr_frontend_repository_name != null ? var.ecr_frontend_repository_name : "${var.project_name}-frontend-${var.environment}"
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = {
-    Name        = "${var.project_name}-frontend-${var.environment}"
-    Environment = var.environment
   }
 }
 
@@ -33,25 +14,11 @@ resource "aws_ecr_lifecycle_policy" "backend" {
     rules = [
       {
         rulePriority = 1
-        description  = "Keep last 30 tagged timestamp images"
+        description  = "Keep last 5 container images"
         selection = {
-          tagStatus     = "tagged"
-          tagPrefixList = ["20"]
-          countType     = "imageCountMoreThan"
-          countNumber   = 30
-        }
-        action = {
-          type = "expire"
-        }
-      },
-      {
-        rulePriority = 2
-        description  = "Expire untagged images older than 14 days"
-        selection = {
-          tagStatus   = "untagged"
-          countType   = "sinceImagePushed"
-          countUnit   = "days"
-          countNumber = 14
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 5
         }
         action = {
           type = "expire"
@@ -61,36 +28,22 @@ resource "aws_ecr_lifecycle_policy" "backend" {
   })
 }
 
-resource "aws_ecr_lifecycle_policy" "frontend" {
-  repository = aws_ecr_repository.frontend.name
+resource "aws_ecr_repository_policy" "backend_lambda" {
+  repository = aws_ecr_repository.backend.name
 
   policy = jsonencode({
-    rules = [
+    Version = "2012-10-17"
+    Statement = [
       {
-        rulePriority = 1
-        description  = "Keep last 30 tagged timestamp images"
-        selection = {
-          tagStatus     = "tagged"
-          tagPrefixList = ["20"]
-          countType     = "imageCountMoreThan"
-          countNumber   = 30
+        Sid    = "LambdaECRImageRetrievalPolicy"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
         }
-        action = {
-          type = "expire"
-        }
-      },
-      {
-        rulePriority = 2
-        description  = "Expire untagged images older than 14 days"
-        selection = {
-          tagStatus   = "untagged"
-          countType   = "sinceImagePushed"
-          countUnit   = "days"
-          countNumber = 14
-        }
-        action = {
-          type = "expire"
-        }
+        Action = [
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer"
+        ]
       }
     ]
   })
