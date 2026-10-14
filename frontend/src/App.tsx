@@ -53,14 +53,15 @@ export default function App() {
   // Refresh all state from centralized services layer
   const refreshData = useCallback(async () => {
     try {
-      const user = await lifecycleService.getCurrentUser();
+      const [user, users] = await Promise.all([
+        lifecycleService.getCurrentUser(),
+        lifecycleService.listUsers(),
+      ]);
       setCurrentUser(user);
-
-      const users = await lifecycleService.listUsers();
       setAllUsers(users);
 
       if (user) {
-        const [loadedGroups, loadedItems, loadedReminders, loadedConfig, loadedHistory] =
+        const [loadedGroups, loadedItems, loadedReminders] =
           await Promise.all([
             lifecycleService.getGroups(),
             lifecycleService.getItems(
@@ -69,15 +70,22 @@ export default function App() {
                 : { groupId: selectedGroupId }
             ),
             lifecycleService.getRemindersSummary(),
-            lifecycleService.getDigestConfig(),
-            lifecycleService.getDigestHistory(),
           ]);
 
         setGroups(loadedGroups);
         setItems(loadedItems);
         setReminders(loadedReminders);
-        setDigestConfig(loadedConfig);
-        setDigestHistory(loadedHistory);
+
+        // Fetch digest settings in background without blocking initial paint
+        Promise.all([
+          lifecycleService.getDigestConfig(),
+          lifecycleService.getDigestHistory(),
+        ])
+          .then(([loadedConfig, loadedHistory]) => {
+            setDigestConfig(loadedConfig);
+            setDigestHistory(loadedHistory);
+          })
+          .catch((err) => console.debug('Digest data deferred fetch error:', err));
       } else {
         setGroups([]);
         setItems([]);
