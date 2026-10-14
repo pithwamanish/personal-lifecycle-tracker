@@ -3,6 +3,11 @@ output "cloudfront_domain_name" {
   value       = aws_cloudfront_distribution.cdn.domain_name
 }
 
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID for cache invalidations"
+  value       = aws_cloudfront_distribution.cdn.id
+}
+
 output "application_url" {
   description = "Production Application URL"
   value       = "https://${aws_cloudfront_distribution.cdn.domain_name}"

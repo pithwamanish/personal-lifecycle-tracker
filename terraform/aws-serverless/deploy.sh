@@ -135,7 +135,13 @@ docker run --rm \
   -w /app \
   "${NODE_IMAGE}" sh -c "npm install && npm run build"
 
-echo "    Syncing Frontend distribution to S3 bucket (s3://${S3_BUCKET})..."
+echo "    Pre-compressing assets with Gzip for maximum performance..."
+docker run --rm \
+  -v "${PROJECT_ROOT}/frontend/dist:/dist" \
+  -w /dist \
+  alpine:latest sh -c "gzip -k -9 -f assets/*.js assets/*.css 2>/dev/null || true"
+
+echo "    Syncing non-compressed files to S3 bucket (s3://${S3_BUCKET})..."
 docker run --rm \
   -v "${PROJECT_ROOT}/frontend/dist:/dist" \
   -v "${HOME}/.aws:/root/.aws:ro" \
@@ -143,7 +149,48 @@ docker run --rm \
   -e AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}" \
   -e AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN:-}" \
   -e AWS_DEFAULT_REGION="${AWS_REGION}" \
-  "${AWS_CLI_IMAGE}" s3 sync /dist "s3://${S3_BUCKET}/" --delete
+  "${AWS_CLI_IMAGE}" s3 sync /dist "s3://${S3_BUCKET}/" --exclude "*.gz" --delete
+
+echo "    Uploading pre-compressed assets with Content-Encoding: gzip..."
+docker run --rm \
+  -v "${PROJECT_ROOT}/frontend/dist:/dist" \
+  -v "${HOME}/.aws:/root/.aws:ro" \
+  -e AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}" \
+  -e AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}" \
+  -e AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN:-}" \
+  -e AWS_DEFAULT_REGION="${AWS_REGION}" \
+  "${AWS_CLI_IMAGE}" s3 sync /dist/assets "s3://${S3_BUCKET}/assets/" --exclude "*" --include "*.js" --content-encoding gzip --content-type application/javascript
+
+docker run --rm \
+  -v "${PROJECT_ROOT}/frontend/dist:/dist" \
+  -v "${HOME}/.aws:/root/.aws:ro" \
+  -e AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}" \
+  -e AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}" \
+  -e AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN:-}" \
+  -e AWS_DEFAULT_REGION="${AWS_REGION}" \
+  "${AWS_CLI_IMAGE}" s3 sync /dist/assets "s3://${S3_BUCKET}/assets/" --exclude "*" --include "*.css" --content-encoding gzip --content-type text/css
+
+echo "    Invalidating CloudFront distribution cache..."
+CLOUDFRONT_ID=$(docker run --rm \
+  -v "${TF_DIR}:/workspace" \
+  -v "${HOME}/.aws:/root/.aws:ro" \
+  -e AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}" \
+  -e AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}" \
+  -e AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN:-}" \
+  -e AWS_DEFAULT_REGION="${AWS_REGION}" \
+  -w /workspace \
+  "${TF_IMAGE}" output -raw cloudfront_distribution_id 2>/dev/null || echo "")
+
+if [ -n "${CLOUDFRONT_ID}" ]; then
+  docker run --rm \
+    -v "${HOME}/.aws:/root/.aws:ro" \
+    -e AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}" \
+    -e AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}" \
+    -e AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN:-}" \
+    -e AWS_DEFAULT_REGION="${AWS_REGION}" \
+    "${AWS_CLI_IMAGE}" cloudfront create-invalidation --distribution-id "${CLOUDFRONT_ID}" --paths "/*" > /dev/null || true
+  echo "    CloudFront invalidation created for /*."
+fi
 
 # 7. Verification & Live Status
 echo "==> [7/7] Deployment complete! Verifying endpoints..."

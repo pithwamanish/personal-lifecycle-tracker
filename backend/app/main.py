@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,13 +24,21 @@ def create_app() -> FastAPI:
     init_opentelemetry(app)
     setup_telemetry_middleware(app)
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    raw_origins = os.getenv("CORS_ORIGINS", "")
+    origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+    is_lambda = bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME") or os.getenv("AWS_EXECUTION_ENV"))
+
+    # In AWS Lambda, the Lambda Function URL natively attaches CORS headers.
+    # Avoid duplicate headers unless specific origins are explicitly configured.
+    if not is_lambda or raw_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins if origins else ["*"],
+            allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
@@ -62,6 +71,14 @@ def create_app() -> FastAPI:
     app.include_router(groups.router, prefix="/api/v1/groups", tags=["groups"])
     app.include_router(reminders.router, prefix="/api/v1/reminders", tags=["reminders"])
     app.include_router(dev.router, prefix="/api/v1/dev", tags=["dev"])
+
+    # Eagerly warm DatabaseStore during container boot
+    try:
+        from app.store import get_store
+        get_store()
+    except Exception as e:
+        # Avoid crashing container boot if database is temporarily unreachable
+        pass
 
     return app
 

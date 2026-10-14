@@ -36,7 +36,6 @@ async def list_items(
         lifecycle_type=type,
         search_query=searchQuery,
     )
-    store.sync_metrics()
     return items
 
 

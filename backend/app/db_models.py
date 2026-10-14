@@ -69,6 +69,7 @@ class GroupModel(Base):
         back_populates="group",
         cascade="all, delete-orphan",
         order_by="GroupMemberModel.id",
+        lazy="selectin",
     )
 
     def to_group(self) -> Group:
