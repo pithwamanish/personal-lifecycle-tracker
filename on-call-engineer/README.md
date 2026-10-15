@@ -88,11 +88,16 @@ make on-call-poll
 - `ALERT_API_URL` or `PROMETHEUS_URL`: Override default Prometheus endpoint (default: `http://localhost:9091/api/v1/alerts`).
 - `ALERT_POLL_INTERVAL` or `POLL_INTERVAL`: Override default polling interval (default: `60`).
 
+### Automated CI/CD Failure Detection (Dual-Channel)
+The on-call system ingests CI/CD failures via two automated mechanisms without manual human intervention:
+1. **Pull-Based (Continuous Poller)**: `poll-alerts.py` automatically queries GitHub Actions runs via `gh` CLI in every 60s cycle. When a workflow run fails on active branches, it generates `_docs/incidents/incident-<id>.json` and dispatches the agent immediately.
+2. **Push-Based (Real-Time in CI)**: `.github/workflows/ci.yml` contains a dedicated `notify-on-call` job (`if: failure()`). Whenever ANY job in the workflow fails, it runs automatically and feeds the incident payload directly into `on-call-engineer/scripts/receive-alert`.
+
 ---
 
 ## 4. Headless Coding Agent Dispatch
 
-When an alert enters the `firing` state:
+When an alert enters the `firing` state (from either Prometheus or GitHub Actions CI/CD):
 1. **Normalization**: The raw alert labels and annotations are extracted and structured according to [`payload-schema.json`](payload-schema.json).
 2. **Persistence**:
    - Incident data: `_docs/incidents/incident-<timestamp>-<alert_name>.json`
@@ -101,7 +106,7 @@ When an alert enters the `firing` state:
    - **Antigravity CLI**: If `agy` is installed, runs `agy --prompt "$(cat prompt.md)"`.
    - **Claude Code**: If `claude` is installed, runs `claude -p "$(cat prompt.md)"`.
    - **Autonomous Headless Responder**: If running headless in container/CI, runs the autonomous triage loop: gathers evidence via `collect-evidence`, verifies against `authorize-action`, logs the session, and prepares a repro test.
-4. **Resolution Tracking**: When the alert recovers and is no longer returned as firing, the poller logs `ALERT_RESOLVED` and clears the alert fingerprint.
+4. **Resolution Tracking**: When the alert recovers and is no longer returned as firing (or when the subsequent CI run passes), the poller logs `ALERT_RESOLVED` and clears the alert fingerprint.
 
 ---
 
@@ -167,10 +172,52 @@ make on-call-simulate-cloud
 bash on-call-engineer/cloud-simulator/scripts/run-cloud-simulation
 ```
 
-The simulation validates that:
-1. The SNS alert topic is created and accepts messages in the emulator.
-2. The Lambda dispatcher receives the SNS event, extracts the payload, and dispatches the Fargate task.
-3. The Fargate task executes headlessly in an isolated container.
-4. All artifacts (`diff.patch`, `evidence.json`, `transcript.log`) are securely uploaded to S3.
-5. The container terminates immediately, leaving 0 lingering compute containers.
+---
 
+## 7. Live AWS Serverless On-Call Responder (SNS -> Lambda)
+
+For production deployments on AWS, the responder deploys as a native serverless Lambda function (`on-call-engineer/lambda_handler.py`) integrated with Amazon SNS and CloudWatch Alarms:
+
+```
+[CloudWatch Alarm / EventBridge]
+           │
+           │ (Alarm Firing Notification)
+           ▼
+[Amazon SNS Alert Topic]
+           │
+           │ (Event Notification)
+           ▼
+[AWS Lambda Responder] (on-call-engineer/lambda_handler.py)
+           │
+           ├──► Normalizes incoming alert payload
+           ├──► Evaluates Autonomy Policy outside the model:
+           │      - LEVEL_1_AUTO_EXECUTE: Autonomous operational remediation (rollback, restart)
+           │      - LEVEL_2_HUMAN_APPROVAL: Pauses execution, emits patch diff, awaits operator sign-off
+           │      - LEVEL_3_ESCALATE: Hard escalation to human engineer
+           ├──► Verifies service health endpoint
+           └──► Emits timestamped audit log to CloudWatch Logs
+```
+
+### Running the Live AWS Level 1 Drill
+```bash
+make on-call-aws-drill
+# or: bash on-call-engineer/scripts/run-aws-incident-drill
+```
+
+---
+
+## 8. Level 2 Code-Fix, Human Approval Gate & Automated Git Push Drill
+
+When an incident is caused by a real code defect rather than an operational blip, the responder executes the Level 2 workflow:
+
+1. **Failure Reproduction**: Runs a reproduction test proving the failure before touching any code.
+2. **Autonomy Policy Enforcement (Without Approval)**: If `human_approval=false`, the responder **halts immediately** (`PAUSED_FOR_HUMAN_APPROVAL`, HTTP 202) and emits the proposed patch diff for human review.
+3. **Operator Sign-Off**: Once the operator reviews the proposed diff and approves (`human_approval=true`), the responder applies the minimal patch.
+4. **Test Verification**: Executes the reproduction test (verifying HTTP 201 Created) and the complete backend test suite.
+5. **Security Gate & Git Audit Trail**: Triggers pre-commit Semgrep SAST scan (0 findings required) and commits the verified fix to Git with incident audit references.
+
+### Running the Level 2 Code-Fix Drill
+```bash
+make on-call-code-fix-drill
+# or: bash on-call-engineer/scripts/run-code-fix-drill
+```

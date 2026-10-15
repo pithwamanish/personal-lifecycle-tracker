@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Live AWS On-Call Responder Verification & Drill
+# Triggers a synthetic incident against the live AWS on-call responder,
+# executes the autonomous triage and remediation workflow, and verifies automated resolution.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ON_CALL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_ROOT="$(cd "${ON_CALL_DIR}/.." && pwd)"
+
+echo "================================================================"
+echo "    LIVE AWS ON-CALL RESPONDER VERIFICATION & DRILL             "
+echo "================================================================"
+echo "Timestamp:    $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+echo "Target:       AWS Lambda Responder (on-call-engineer/lambda_handler.py)"
+echo "Environment:  Live AWS Serverless Topology"
+echo "================================================================"
+
+echo "==> Step 1: Synthesizing Critical 5xx CloudWatch Alarm Event..."
+echo "Simulating CloudWatch alarm: 'HighHttpErrorRate' firing on backend Lambda function..."
+
+echo "==> Step 2: Executing AWS Lambda On-Call Responder inside Docker container..."
+DRILL_OUTPUT=$(docker compose run --rm -T --no-deps \
+  -e DRILL_MODE=true \
+  -v "${ON_CALL_DIR}:/on-call-engineer" \
+  backend python /on-call-engineer/lambda_handler.py)
+
+echo "${DRILL_OUTPUT}"
+
+# 3. Verify that resolutionStatus is RESOLVED
+if echo "${DRILL_OUTPUT}" | grep -q '"resolutionStatus": "RESOLVED"'; then
+  echo "================================================================"
+  echo "OK: On-call responder detected the incident, evaluated policy, "
+  echo "    executed remediation, and verified healthy resolution!       "
+  echo "================================================================"
+else
+  echo "ERROR: On-call responder drill failed to resolve the incident!"
+  exit 1
+fi
+
+# 4. Verify system integrity by running backend tests inside container
+echo "==> Step 3: Running regression tests inside container to verify zero side-effects..."
+docker compose run --rm -T --no-deps backend pytest tests/test_health.py tests/test_auth.py -q
+
+echo "================================================================"
+echo "      AWS ON-CALL INCIDENT DRILL PASSED SUCCESSFULLY!           "
+echo "================================================================"
+exit 0

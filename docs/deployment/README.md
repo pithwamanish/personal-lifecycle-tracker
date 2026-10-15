@@ -14,9 +14,8 @@ This directory contains the Infrastructure as Code (IaC) templates, configuratio
 | **Render Services** | `personal-lifecycle-*-dev` | `personal-lifecycle-*-prod` |
 | **Render Plan** | Free tier (`free`) | Starter tier (`starter`) |
 | **Render Terraform** | [`terraform/render/`](../../terraform/render/) (`default = "dev"`) | [`terraform/render-prod/`](../../terraform/render-prod/) (`default = "production"`) |
-| **AWS Terraform** | [`terraform/aws/`](../../terraform/aws/) | [`terraform/aws-prod/`](../../terraform/aws-prod/) |
-| **AWS VPC CIDR** | `10.1.0.0/16` (Public Subnet: `10.1.1.0/24`) | `10.0.0.0/16` (Public Subnet: `10.0.1.0/24`) |
-| **AWS CloudFormation**| [`cloudformation/aws-ec2-compose.yaml`](../../cloudformation/aws-ec2-compose.yaml) | [`cloudformation/aws-ec2-compose-prod.yaml`](../../cloudformation/aws-ec2-compose-prod.yaml) |
+| **AWS Terraform** | [`terraform/aws/`](../../terraform/aws/) (Serverless Lambda + S3 + CDN) | [`terraform/aws-prod/`](../../terraform/aws-prod/) (Serverless Lambda + S3 + CDN) |
+| **AWS CloudFormation**| [`cloudformation/aws-serverless-lambda.yaml`](../../cloudformation/aws-serverless-lambda.yaml) | [`cloudformation/aws-serverless-lambda-prod.yaml`](../../cloudformation/aws-serverless-lambda-prod.yaml) |
 | **CI/CD Triggers** | Pushes to `dev`/`develop` or manual dispatch | Pushes to `main` or manual dispatch |
 | **Local Compose** | `docker-compose.yaml` (Ports: `8003`, `3003`, `5434`) | `docker-compose.prod.yml` (Port: `8088`, Caddy Proxy) |
 
@@ -31,9 +30,9 @@ This directory contains the Infrastructure as Code (IaC) templates, configuratio
 | **Render (IaC)** | Terraform (`terraform/render/` & `terraform/render-prod/`) | Declarative infrastructure management via Render Terraform Provider | Free / Starter | [Render Deployment Guide](render.md) |
 | **CI/CD** | GitHub Actions (`.github/workflows/ci.yml`) | Parallel Tests + Docker Compose E2E + GitHub OIDC Auth + Multi-Env Render Deploy | Free Tier Eligible | [CI/CD Pipeline Guide](ci-cd.md) |
 | **Production Promotion** | GitHub Actions (`.github/workflows/promote-dev-to-prod.yml`) | Manual dev→production promotion, conflict check, test gates, SemVer tagging, GitHub Release & live deploy | Free Tier Eligible | [Production Promotion Guide](ci-cd.md#7-dev-to-production-manual-promotion-workflow-promote-dev-to-prodyml) |
-| **AWS (Dev)** | Terraform (`terraform/aws/`) | EC2 (`t3.micro`/Free Tier) + Elastic IP + SSM Session Manager (`10.1.0.0/16` VPC) | Free Tier Eligible (~$0/mo) | [AWS Terraform Guide](aws-terraform.md) |
-| **AWS (Prod)** | Terraform (`terraform/aws-prod/`) | EC2 (`t3.micro`/Free Tier) + Elastic IP + SSM Session Manager (`10.0.0.0/16` VPC) | Free Tier Eligible (~$0/mo) | [AWS Terraform Guide](aws-terraform.md) |
-| **AWS (CFN)** | CloudFormation (`cloudformation/`) | 1-Click CloudFormation Stacks (`aws-ec2-compose.yaml` and `aws-ec2-compose-prod.yaml`) | Free Tier Eligible (~$0/mo) | [AWS CloudFormation Guide](aws-cloudformation.md) |
+| **AWS (Dev)** | Terraform (`terraform/aws/`) | Serverless Lambda + CloudFront CDN + S3 + On-Call Responder | Free Tier Eligible (~$0/mo) | [AWS Terraform Guide](aws-terraform.md) |
+| **AWS (Prod)** | Terraform (`terraform/aws-prod/`) | Serverless Lambda + CloudFront CDN + S3 + On-Call Responder | Free Tier Eligible (~$0/mo) | [AWS Terraform Guide](aws-terraform.md) |
+| **AWS (CFN)** | CloudFormation (`cloudformation/`) | 1-Click Serverless Stacks (`aws-serverless-lambda.yaml` and `aws-serverless-lambda-prod.yaml`) | Free Tier Eligible (~$0/mo) | [AWS CloudFormation Guide](aws-cloudformation.md) |
 
 ---
 

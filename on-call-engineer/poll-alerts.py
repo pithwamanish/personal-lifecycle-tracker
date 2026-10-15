@@ -259,9 +259,52 @@ def pass_to_headless_agent(normalized, agent_cmd=None):
     return incident_file, prompt_file
 
 
+def fetch_ci_failures(limit=3):
+    """
+    Checks recent GitHub Actions runs. If the most recent run on the active branch
+    has completed with a 'failure' conclusion, returns it as a firing alert.
+    """
+    try:
+        cmd = ["gh", "run", "list", "--limit", str(limit), "--json", "databaseId,name,conclusion,status,headBranch,headSha,url,updatedAt"]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if res.returncode == 0:
+            runs = json.loads(res.stdout)
+            if runs:
+                latest = runs[0]
+                if latest.get("conclusion") == "failure" and latest.get("status") == "completed":
+                    wf_name = latest.get("name", "CI/CD Pipeline")
+                    run_id = latest.get("databaseId")
+                    branch = latest.get("headBranch", "dev")
+                    sha = latest.get("headSha", "latest")
+                    short_sha = sha[:7] if sha else "latest"
+                    clean_name = re.sub(r'[^a-zA-Z0-9_]', '_', wf_name)
+                    return [{
+                        "labels": {
+                            "alertname": f"CiCdJobFailed_{clean_name}",
+                            "severity": "critical",
+                            "service": wf_name,
+                            "environment": branch,
+                            "version": short_sha,
+                            "source": "github_actions",
+                            "run_id": str(run_id)
+                        },
+                        "annotations": {
+                            "summary": f"GitHub Actions {wf_name} failed on branch {branch} (run #{run_id})",
+                            "description": f"CI/CD run {run_id} terminated with failure. To view logs: gh run view {run_id} --log-failed",
+                            "dashboard_url": latest.get("url", f"https://github.com/pithwamanish/personal-lifecycle-tracker/actions/runs/{run_id}"),
+                            "runbook_url": "on-call-engineer/runbook.md#3-github-actions-cicd-triage-guides"
+                        },
+                        "state": "firing",
+                        "activeAt": latest.get("updatedAt", datetime.datetime.now(datetime.timezone.utc).isoformat())
+                    }]
+    except Exception as e:
+        logger.debug(f"Unable to query GitHub Actions runs: {e}")
+    return []
+
+
 def poll_cycle(api_url, active_alerts, agent_cmd, mock_file=None, retrigger=False):
     """
-    Executes a single poll cycle against the alert API.
+    Executes a single poll cycle against the alert API and CI/CD pipelines.
     """
     if mock_file:
         logger.info(f"Loading alerts from mock file: {mock_file}")
@@ -272,6 +315,14 @@ def poll_cycle(api_url, active_alerts, agent_cmd, mock_file=None, retrigger=Fals
         data = fetch_alerts(api_url)
 
     firing_list = parse_firing_alerts(data)
+
+    # Ingest GitHub Actions CI/CD failures
+    if not mock_file:
+        ci_failures = fetch_ci_failures()
+        if ci_failures:
+            logger.info(f"Detected {len(ci_failures)} failed GitHub Actions CI run(s).")
+            firing_list.extend(ci_failures)
+
     current_cycle_keys = set()
 
     if not firing_list:

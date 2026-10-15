@@ -637,7 +637,7 @@ class DatabaseStore:
                     due_dt = datetime.strptime(raw_due[:10], "%Y-%m-%d")
 
                 # Check if item is already overdue upon creation to evaluate urgency
-                now_dt = datetime.now()
+                now_dt = datetime.now(timezone.utc) if due_dt.tzinfo else datetime.now()
                 if due_dt < now_dt:
                     pass
 
@@ -722,7 +722,7 @@ class DatabaseStore:
                         due_dt = datetime.fromisoformat(raw_due)
                     else:
                         due_dt = datetime.strptime(raw_due[:10], "%Y-%m-%d")
-                    now_dt = datetime.now()
+                    now_dt = datetime.now(timezone.utc) if due_dt.tzinfo else datetime.now()
                     if due_dt < now_dt:
                         pass
                     item.due_date = due_dt.strftime("%Y-%m-%d")

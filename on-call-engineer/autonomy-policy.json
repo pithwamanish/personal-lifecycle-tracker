@@ -30,11 +30,29 @@
       "max_executions_per_incident": 2
     },
     {
+      "action_name": "rerun_ci_job",
+      "autonomy_level": "LEVEL_1_AUTO_EXECUTE",
+      "allowed_commands": [
+        "gh run rerun {run_id} --failed"
+      ],
+      "reversible": true,
+      "max_executions_per_incident": 2
+    },
+    {
       "action_name": "apply_patch",
       "autonomy_level": "LEVEL_2_HUMAN_APPROVAL",
       "allowed_commands": [
         "git apply /tmp/patch.diff",
         "git cherry-pick {commit_sha}"
+      ],
+      "requires_human_confirmation": true
+    },
+    {
+      "action_name": "fix_ci_workflow",
+      "autonomy_level": "LEVEL_2_HUMAN_APPROVAL",
+      "allowed_commands": [
+        "act -n -W .github/workflows/ci.yml",
+        "make ci-validate"
       ],
       "requires_human_confirmation": true
     },
@@ -53,7 +71,10 @@
     "DROP DATABASE",
     "TRUNCATE",
     "DELETE FROM .* WHERE 1=1",
-    "docker compose down -v"
+    "docker compose down -v",
+    "--no-verify",
+    "semgrep.*--disable",
+    "npm audit.*--audit-level=none"
   ],
   "default_fallback": "LEVEL_3_ESCALATE"
 }

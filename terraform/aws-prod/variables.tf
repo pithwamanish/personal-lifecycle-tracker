@@ -16,81 +16,34 @@ variable "environment" {
   default     = "production"
 }
 
-variable "vpc_cidr" {
-  description = "VPC CIDR block for production"
+variable "database_url" {
+  description = "Neon Serverless PostgreSQL connection URL"
   type        = string
-  default     = "10.0.0.0/16"
-}
-
-variable "subnet_cidr" {
-  description = "Public Subnet CIDR block for production"
-  type        = string
-  default     = "10.0.1.0/24"
-}
-
-variable "instance_type" {
-  description = "EC2 instance type (Free Tier eligible: t3.micro or t4g.micro)"
-  type        = string
-  default     = "t3.micro"
-}
-
-variable "ami_id" {
-  description = "Specific AMI ID. If null, latest Ubuntu 24.04 LTS is automatically selected"
-  type        = string
-  default     = null
-}
-
-variable "key_name" {
-  description = "Optional EC2 Key Pair name for SSH access (optional, SSM Session Manager is enabled by default)"
-  type        = string
-  default     = null
-}
-
-variable "allowed_ssh_cidr" {
-  description = "Allowed CIDR block for SSH access (port 22)"
-  type        = string
-  default     = "0.0.0.0/0"
-}
-
-variable "allowed_http_cidr" {
-  description = "Allowed CIDR block for web traffic (ports 80, 443, 8088)"
-  type        = string
-  default     = "0.0.0.0/0"
-}
-
-variable "app_port" {
-  description = "Host port on EC2 mapped to production Caddy reverse proxy"
-  type        = number
-  default     = 80
-}
-
-variable "root_volume_size" {
-  description = "Root EBS GP3 volume size in GB (Free tier covers up to 30 GB)"
-  type        = number
-  default     = 20
-}
-
-variable "repo_url" {
-  description = "Git repository URL to clone and run on the EC2 instance"
-  type        = string
-  default     = "https://github.com/pithwamanish/personal-lifecycle-tracker.git"
-}
-
-variable "repo_branch" {
-  description = "Git branch to check out"
-  type        = string
-  default     = "main"
-}
-
-variable "postgres_password" {
-  description = "Password for PostgreSQL. If left empty, a secure random password will be generated automatically"
-  type        = string
-  default     = ""
+  default     = "postgresql://postgres:postgres@localhost:5432/lifecycle"
   sensitive   = true
 }
 
+variable "secret_key" {
+  description = "Cryptographic secret key for signing JWT tokens"
+  type        = string
+  default     = "prod-insecure-jwt-secret-key-replace-in-production-at-least-32-chars"
+  sensitive   = true
+}
+
+variable "warmer_rate" {
+  description = "EventBridge warm-up schedule expression to eliminate cold starts"
+  type        = string
+  default     = "rate(4 minutes)"
+}
+
+variable "digest_cron" {
+  description = "EventBridge cron schedule for morning daily email digest (08:00 AM UTC)"
+  type        = string
+  default     = "cron(0 8 * * ? *)"
+}
+
 variable "enable_github_oidc" {
-  description = "Whether to provision the GitHub Actions OIDC provider and IAM role for Render deployment"
+  description = "Whether to provision the GitHub Actions OIDC provider and IAM role for automated deployments"
   type        = bool
   default     = true
 }
@@ -119,3 +72,14 @@ variable "ecr_frontend_repository_name" {
   default     = null
 }
 
+variable "otel_exporter_otlp_endpoint" {
+  description = "OpenTelemetry Collector OTLP endpoint (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "otel_exporter_otlp_headers" {
+  description = "OpenTelemetry Collector authorization headers (optional)"
+  type        = string
+  default     = ""
+}
