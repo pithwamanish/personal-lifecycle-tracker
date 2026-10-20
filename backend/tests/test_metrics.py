@@ -104,7 +104,7 @@ def test_auth_and_reminders_metrics(client: TestClient, auth_headers: dict):
 
 
 def test_route_normalization_avoids_cardinality_explosion(client: TestClient, auth_headers: dict):
-    """Verify that route paths with dynamic UUIDs are normalized to avoid high cardinality."""
+    """Verify that route paths with dynamic UUIDs and member emails are normalized to avoid high cardinality."""
     # Access an item by ID
     client.get("/api/v1/items/8f51a704-5853-41bb-9466-9e1234567890", headers=auth_headers)
 
@@ -113,6 +113,13 @@ def test_route_normalization_avoids_cardinality_explosion(client: TestClient, au
     # The route should be normalized to /api/v1/items/{id} rather than raw UUID
     assert 'http_route="/api/v1/items/{id}"' in text
     assert "8f51a704-5853-41bb-9466-9e1234567890" not in text
+
+    # Access a member route by email
+    client.delete("/api/v1/groups/group_home/members/testuser@example.com", headers=auth_headers)
+    metrics_res2 = client.get("/metrics")
+    text2 = metrics_res2.text
+    assert "testuser@example.com" not in text2
+    assert "{memberEmail}" in text2
 
 
 def test_item_creation_failure_metrics(client: TestClient, auth_headers: dict):

@@ -289,33 +289,31 @@ To maintain context precision across AI agent sessions, detailed domain knowledg
 │       ├── aws-terraform.md   # AWS EC2 Docker Compose Terraform guide
 │       └── aws-cloudformation.md # AWS CloudFormation 1-click guide
 ├── cloudformation/
-│   ├── aws-ec2-compose.yaml   # AWS CloudFormation (Dev Environment: 10.1.0.0/16)
-│   └── aws-ec2-compose-prod.yaml # AWS CloudFormation (Production Copy: 10.0.0.0/16)
+│   ├── aws-serverless-lambda.yaml   # AWS CloudFormation Serverless (Dev: Lambda + S3 + CloudFront)
+│   └── aws-serverless-lambda-prod.yaml # AWS CloudFormation Serverless (Production Copy)
 ├── render.yaml                # Render Blueprint (Dev Environment)
 ├── render.prod.yaml           # Render Blueprint (Production Environment Copy)
 ├── terraform/
-│   ├── aws/                   # AWS Terraform (Dev Environment: 10.1.0.0/16)
+│   ├── aws/                   # AWS Terraform Serverless (Dev: Lambda + S3 + CloudFront + ECR)
 │   │   ├── versions.tf
 │   │   ├── variables.tf
-│   │   ├── vpc.tf
-│   │   ├── security_groups.tf
-│   │   ├── iam.tf
-│   │   ├── user_data.sh       # Cloud-init bootstrapper
-│   │   ├── ec2.tf
-│   │   ├── eip.tf
+│   │   ├── lambda.tf
+│   │   ├── s3_cloudfront.tf
+│   │   ├── ecr.tf
 │   │   ├── oidc.tf
+│   │   ├── on-call-responder.tf
+│   │   ├── scheduler.tf
 │   │   ├── outputs.tf
 │   │   └── terraform.tfvars.dev
-│   ├── aws-prod/              # AWS Terraform (Production Environment Copy: 10.0.0.0/16)
+│   ├── aws-prod/              # AWS Terraform Serverless (Production Copy)
 │   │   ├── versions.tf
 │   │   ├── variables.tf
-│   │   ├── vpc.tf
-│   │   ├── security_groups.tf
-│   │   ├── iam.tf
-│   │   ├── user_data.sh
-│   │   ├── ec2.tf
-│   │   ├── eip.tf
+│   │   ├── lambda.tf
+│   │   ├── s3_cloudfront.tf
+│   │   ├── ecr.tf
 │   │   ├── oidc.tf
+│   │   ├── on-call-responder.tf
+│   │   ├── scheduler.tf
 │   │   ├── outputs.tf
 │   │   └── terraform.tfvars.prod
 │   ├── render/                # Render Terraform (Dev Environment: free plan)
@@ -366,7 +364,7 @@ Execute all validations and formatting inside Docker without host dependencies:
   - Validation: `make tf-validate-render` and `make tf-validate-render-prod`
 - **AWS**:
   - Dev Terraform: [`terraform/aws/`](terraform/aws/) | Prod Terraform Copy: [`terraform/aws-prod/`](terraform/aws-prod/)
-  - Dev CloudFormation: [`cloudformation/aws-ec2-compose.yaml`](cloudformation/aws-ec2-compose.yaml) | Prod CloudFormation Copy: [`cloudformation/aws-ec2-compose-prod.yaml`](cloudformation/aws-ec2-compose-prod.yaml)
+  - Dev CloudFormation: [`cloudformation/aws-serverless-lambda.yaml`](cloudformation/aws-serverless-lambda.yaml) | Prod CloudFormation Copy: [`cloudformation/aws-serverless-lambda-prod.yaml`](cloudformation/aws-serverless-lambda-prod.yaml)
   - Validation: `make tf-validate` (validates all Terraform environments) and `make cf-validate` (validates both CloudFormation templates)
 
 ---

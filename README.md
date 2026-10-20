@@ -249,7 +249,7 @@ We maintain two independent copies of our infrastructure across **Render** and *
 | **Render** | [`render.yaml`](render.yaml) | [`render.prod.yaml`](render.prod.yaml) | Managed PostgreSQL + FastAPI + React/Caddy |
 | **Render (Terraform)** | [`terraform/render/`](terraform/render/) | [`terraform/render-prod/`](terraform/render-prod/) | Declarative IaC via Render Terraform Provider |
 | **AWS (Terraform)** | [`terraform/aws/`](terraform/aws/) (`10.1.0.0/16`) | [`terraform/aws-prod/`](terraform/aws-prod/) (`10.0.0.0/16`) | EC2 (`t3.micro`/Free Tier) + Elastic IP + SSM |
-| **AWS (CloudFormation)**| [`cloudformation/aws-ec2-compose.yaml`](cloudformation/aws-ec2-compose.yaml) | [`cloudformation/aws-ec2-compose-prod.yaml`](cloudformation/aws-ec2-compose-prod.yaml) | 1-Click AWS Stack (VPC, Subnet, SG, EC2, EIP, SSM) |
+| **AWS (CloudFormation)**| [`cloudformation/aws-serverless-lambda.yaml`](cloudformation/aws-serverless-lambda.yaml) | [`cloudformation/aws-serverless-lambda-prod.yaml`](cloudformation/aws-serverless-lambda-prod.yaml) | 1-Click AWS Serverless Stack (Lambda + S3 + CloudFront + OTel) |
 
 ### Verification Endpoints & Health Checks
 
