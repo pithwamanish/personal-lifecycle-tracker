@@ -34,7 +34,7 @@ Every feature, refactoring, and infrastructure change must advance through these
 
 3. **Gate 3: Manual Verification Journey**:
    - Focus: Concrete step-by-step user acceptance scenario validating multi-user collaboration and deadline tracking.
-   - Deliverable: Manual test script in [`_docs/manual-test.md`](manual-test.md) and Playwright compliance suite [`e2e/spec-compliance.spec.ts`](../e2e/spec-compliance.spec.ts).
+   - Deliverable: Manual test script in [`_docs/manual-test.md`](test-scenarios/001-primary-flow.md) and Playwright compliance suite [`e2e/spec-compliance.spec.ts`](../e2e/spec-compliance.spec.ts).
 
 4. **Gate 4: Governance Setup & Agent Squad Scaffold**:
    - Focus: Project instructions, role specifications, and operating boundaries.
@@ -46,7 +46,7 @@ Every feature, refactoring, and infrastructure change must advance through these
 
 6. **Gate 6: Architecture Decision Records (ADRs) & Stack Evaluation**:
    - Focus: Architectural decisions, database persistence choice, and local cloud emulator parity.
-   - Deliverables: [`docs/adr/0001-tech-stack-and-cloud-selection.md`](../docs/adr/0001-tech-stack-and-cloud-selection.md), [`_docs/stack.md`](stack.md).
+   - Deliverables: [`docs/adr/0001-adoption-architecture.md`](../docs/adr/0001-adoption-architecture.md), [`_docs/stack.md`](stack.md).
 
 7. **Gate 7: Scaffolding & Container Foundation**:
    - Focus: Reproducible zero-host-runtime container environments.

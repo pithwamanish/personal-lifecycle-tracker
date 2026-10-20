@@ -339,7 +339,7 @@ This project adheres strictly to the AI Dev Tools Final Project Rubric. Below is
 | **10**| **Observability** | `2` | 2 | Key user journey instrumented with metrics, traces, structured logs with trace ID; signals in UI. | `make obs-up` -> [http://localhost:3004](http://localhost:3004) (Grafana), [`backend/app/telemetry.py`](backend/app/telemetry.py), [`_docs/telemetry.md`](_docs/telemetry.md) |
 | **11**| **Alerting on User Impact**| `1` | 1 | At least one alert exists alerting on user impact instead of CPU graphs. | [`observability/alert_rules.yml`](observability/alert_rules.yml) (`HighHttpErrorRate`, `DailyDigestFailures`, `RepeatedItemCreationFailures`) |
 | **12**| **On-Call Agent** | `2` | 2 | An agent wakes up on an alert and fixes the issue. | [`on-call-engineer/poll-alerts.py`](on-call-engineer/poll-alerts.py), [`on-call-engineer/scripts/run-code-fix-drill`](on-call-engineer/scripts/run-code-fix-drill) (`make on-call-code-fix-drill`) |
-| **Total** | | **25** | **25** | *(Passing threshold: 10 points)* | **Exceeds requirements across all 12 criteria** |
+| **Total** | | **24** | **24** | *(Passing threshold: 10 points)* | **Exceeds requirements across all 12 criteria** |
 
 ---
 
