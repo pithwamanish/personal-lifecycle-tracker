@@ -228,7 +228,23 @@ VITE_BACKEND_URL=http://backend:8000
 
 ---
 
-## 6. Project Layout
+## 6. Modular Project Documentation
+
+To maintain context precision across AI agent sessions, detailed domain knowledge is partitioned into dedicated modular documents:
+
+- **Agent Team Specification**: [`_docs/team.md`](_docs/team.md) — Squad roles (PM, Architect, Developer, QA, On-Call), responsibilities, and handover protocols.
+- **Development & Operational Process**: [`_docs/process.md`](_docs/process.md) — Formal 12-gate lifecycle, testing pyramid, and promotion gates.
+- **System Architecture & Topology**: [`_docs/architecture.md`](_docs/architecture.md) — Component breakdown, container network layout, and service communication.
+- **Product Functional Specification**: [`product-spec.md`](product-spec.md) — Functional requirements, domain entities, acceptance criteria, and anti-goals.
+- **Implementation Task Backlog**: [`backlog.md`](backlog.md) — Atomic task breakdown, statuses, and verification deliverables.
+- **Observability & Golden Signals**: [`_docs/telemetry.md`](_docs/telemetry.md) — OpenTelemetry tracing, Prometheus metrics, and Loki log correlations.
+- **Security & Permissions Model**: [`docs/permissions.md`](docs/permissions.md) — Tool permissions, least-privilege boundaries, and filesystem confinement.
+- **Interactive Capabilities Demo**: [`docs/demo.md`](docs/demo.md) — 6-step interactive verification script for agent capabilities.
+- **Cloud Deployment & IaC Playbooks**: [`docs/deployment/README.md`](docs/deployment/README.md) — AWS Terraform, CloudFormation, and Render guides.
+
+---
+
+## 7. Project Layout
 
 ```
 .
@@ -340,7 +356,7 @@ VITE_BACKEND_URL=http://backend:8000
 
 ---
 
-## 7. Cloud Deployment Automation (Dev & Production)
+## 8. Cloud Deployment Automation (Dev & Production)
 
 Execute all validations and formatting inside Docker without host dependencies:
 
@@ -355,7 +371,7 @@ Execute all validations and formatting inside Docker without host dependencies:
 
 ---
 
-## 8. Two-Stage Container Registry Pipeline (Amazon ECR)
+## 9. Two-Stage Container Registry Pipeline (Amazon ECR)
 
 The CI/CD pipeline decouples image creation from serving:
 
