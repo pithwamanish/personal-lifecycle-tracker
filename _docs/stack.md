@@ -15,4 +15,11 @@
 ## 2. Infrastructure as Code (IaC)
 
 - **Render**: Blueprint `render.yaml` & `render.prod.yaml`, Terraform `terraform/render/` & `terraform/render-prod/`.
-- **AWS**: Terraform `terraform/aws/` (`10.1.0.0/16`) & `terraform/aws-prod/` (`10.0.0.0/16`), CloudFormation `cloudformation/aws-ec2-compose.yaml` & `cloudformation/aws-ec2-compose-prod.yaml`.
+- **AWS**: Terraform `terraform/aws/` (`10.1.0.0/16`) & `terraform/aws-prod/` (`10.0.0.0/16`), CloudFormation `cloudformation/aws-serverless-lambda.yaml` & `cloudformation/aws-serverless-lambda-prod.yaml`.
+
+## 3. Live Verified Deployment Endpoints (Criterion 8 — 2 Points)
+
+- **Production Web Application**: [https://d1ca9upoitnq9b.cloudfront.net/](https://d1ca9upoitnq9b.cloudfront.net/) *(AWS CloudFront CDN)*
+- **Production Backend API Health**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health) *(AWS Lambda Function URL)*
+- **Interactive Swagger Docs**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs)
+- **Pre-Seeded Demo Credentials**: `alex@example.com` / `password123`

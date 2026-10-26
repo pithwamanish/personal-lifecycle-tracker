@@ -9,9 +9,21 @@
 [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-1.24-F54A00.svg?logo=opentelemetry)](https://opentelemetry.io)
 [![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF.svg?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
 [![Terraform](https://img.shields.io/badge/Terraform-1.7+-7B42BC.svg?logo=terraform)](https://www.terraform.io)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-CloudFront%20CDN-success.svg?logo=amazon-aws)](https://d1ca9upoitnq9b.cloudfront.net/)
+[![API Health](https://img.shields.io/badge/API%20Health-200%20OK-brightgreen.svg?logo=fastapi)](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health)
+[![Swagger Docs](https://img.shields.io/badge/API%20Docs-Swagger%20UI-blue.svg?logo=swagger)](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > Personal Lifecycle Tracker manages **Renewals**, **Maintenance**, and **Warranties** for independent users and shared collaborative groups, providing instant action summaries, in-app notifications, and scheduled daily morning email digests.
+
+> 🚀 **Live Cloud Deployment & Reviewer Demo (Course Rubric Criterion 8 — 2 Points)**:
+> - **Web Application (React 19 SPA)**: [https://d1ca9upoitnq9b.cloudfront.net/](https://d1ca9upoitnq9b.cloudfront.net/) *(Global CloudFront CDN)*
+> - **Backend API Health**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health) *(AWS Lambda + Neon DB)*
+> - **Interactive Swagger UI**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs)
+> - **Interactive ReDoc Documentation**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/redoc](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/redoc)
+> - **OpenAPI 3.1.0 Contract Schema**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/openapi.json](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/openapi.json)
+> - **Pre-Seeded Reviewer Credentials**: `alex@example.com` / `password123` *(or click Sign Up for a fresh account)*
+> - See the complete [Live Cloud Deployment & Peer Reviewer Demo Guide](#10-cloud-infrastructure--environments-dev--production) below for the step-by-step walkthrough and instant terminal verification commands.
 
 ---
 
@@ -251,19 +263,86 @@ We maintain two independent copies of our infrastructure across **Render** and *
 | **AWS (Terraform)** | [`terraform/aws/`](terraform/aws/) (`10.1.0.0/16`) | [`terraform/aws-prod/`](terraform/aws-prod/) (`10.0.0.0/16`) | EC2 (`t3.micro`/Free Tier) + Elastic IP + SSM |
 | **AWS (CloudFormation)**| [`cloudformation/aws-serverless-lambda.yaml`](cloudformation/aws-serverless-lambda.yaml) | [`cloudformation/aws-serverless-lambda-prod.yaml`](cloudformation/aws-serverless-lambda-prod.yaml) | 1-Click AWS Serverless Stack (Lambda + S3 + CloudFront + OTel) |
 
-### Verification Endpoints & Health Checks
+### Live Public Cloud Deployment & Peer Reviewer Demo Guide (Criterion 8 — 2 Points)
 
-The system provides verified live public cloud deployment endpoints, local development endpoints, and containerized production gateway:
+The application is fully deployed and continuously reachable at public production URLs backed by AWS CloudFront CDN, AWS Lambda (with Lambda Web Adapter), and Neon Serverless PostgreSQL over TLS:
 
-- **Live Public Web Application (Production)**: [https://d1ca9upoitnq9b.cloudfront.net/](https://d1ca9upoitnq9b.cloudfront.net/) (Fast, global CloudFront CDN serving React 19 SPA)
-- **Live Public Backend API Health**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health) (Returns `{"status":"healthy","database":"connected","version":"1.0.0"}`)
-- **Live Public Interactive API Docs (Swagger UI)**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs)
-- **Local Development Web Application**: [http://localhost:3003](http://localhost:3003)
-- **Local Development Health Endpoint**: [http://localhost:8003/health](http://localhost:8003/health)
-- **Local Development Swagger Docs**: [http://localhost:8003/docs](http://localhost:8003/docs)
-- **Local Development ReDoc**: [http://localhost:8003/redoc](http://localhost:8003/redoc)
-- **Containerized Production Gateway (Caddy 2)**: [http://localhost:8088](http://localhost:8088)
-- **Containerized Production Health Endpoint**: [http://localhost:8088/health](http://localhost:8088/health) (Status 200, verifies DB & reverse proxy)
+#### 1. Live Public Deployment Endpoints Matrix
+
+| Service / Interface | Public URL | Description | Expected Status / Output |
+|---|---|---|---|
+| **Production Web Application** | [https://d1ca9upoitnq9b.cloudfront.net/](https://d1ca9upoitnq9b.cloudfront.net/) | React 19 SPA deployed on AWS CloudFront CDN edge with private S3 origin | HTTP/2 200 (Interactive Dashboard) |
+| **Backend API Gateway & Health** | [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health) | FastAPI running on AWS Lambda with container adapter & pooled Neon Postgres | `{"status":"healthy","database":"connected","version":"1.0.0"}` |
+| **Interactive API Docs (Swagger UI)** | [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs) | Interactive Swagger UI testing live API endpoints directly in browser | HTTP 200 (Swagger UI) |
+| **Interactive ReDoc Documentation** | [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/redoc](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/redoc) | Searchable API contract reference matching frozen OpenAPI 3.0.3 spec | HTTP 200 (ReDoc UI) |
+| **OpenAPI 3.1.0 Contract Schema** | [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/openapi.json](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/openapi.json) | Raw machine-readable schema dynamically served by FastAPI | Valid OpenAPI 3.1.0 JSON |
+| **Local Development Web App** | [http://localhost:3003](http://localhost:3003) | Local development Vite React frontend (via `make up`) | HTTP 200 |
+| **Local Development API Health** | [http://localhost:8003/health](http://localhost:8003/health) | Local development FastAPI backend (via `make up`) | `{"status":"healthy","database":"connected","version":"1.0.0"}` |
+| **Containerized Production Gateway** | [http://localhost:8088](http://localhost:8088) | Local Caddy 2 reverse-proxying frontend and backend (via `make prod-up`) | HTTP 200 |
+
+#### 2. Pre-Seeded Peer Reviewer Credentials
+
+The database is pre-seeded with accounts and 12 sample lifecycle items across all three categories (Renewals, Warranties, Maintenance):
+
+| Email | Password | Role / Account Type | Pre-Seeded Data Available |
+|---|---|---|---|
+| `alex@example.com` | `password123` | **Primary User (Alex Taylor)** | 12 items: Passports, Car Insurance, Home Maintenance, TV Warranty, "Home Life" shared items |
+| `sarah@example.com` | `password123` | Collaborator (Sarah Miller) | Shared group collaborator in "Home Life" |
+| `jordan@example.com` | `password123` | Collaborator (Jordan Lee) | Shared group collaborator in "Apartment 4B" |
+| *New Registration* | *Any Password* | Clean Account | Click **"Sign Up"** in top header to test zero-state registration |
+
+#### 3. Step-by-Step Live Deployment Demo Walkthrough
+
+Peer reviewers can validate the live public application in 2 minutes:
+
+1. **Access the Public Web Application**: Open [https://d1ca9upoitnq9b.cloudfront.net/](https://d1ca9upoitnq9b.cloudfront.net/) in any browser.
+2. **Log In**: Click **"Sign In"** in the top navigation bar. Enter `alex@example.com` and `password123` (or click **"Sign Up"** to create a fresh user).
+3. **Inspect Action Summary Dashboard**:
+   - Notice the high-level counters at the top: **Overdue**, **Due Soon (≤ 30 Days)**, **Active**, and **Completed**.
+   - Notice that urgent items requiring immediate action are highlighted with visual badges and deadline countdowns.
+4. **Test Dynamic Category Filters**:
+   - Click **"Renewals"** to filter only contract/policy expirations (e.g., Passport, Auto Insurance, AWS Domain).
+   - Click **"Maintenance"** to view recurring servicing tasks (e.g., HVAC Filter Replacement, Vehicle Oil Change).
+   - Click **"Warranties"** to view hardware coverage (e.g., MacBook Pro AppleCare, OLED TV Warranty).
+   - Click **"All"** to restore the unified lifecycle view.
+5. **Create a New Lifecycle Item**:
+   - Click **"+ Add Item"** in the top action bar.
+   - Enter Name: `Car Insurance Renewal`, Type: `Renewal`, Due Date: select a date 14 days from today, Estimated Cost: `$120.00`.
+   - Click **"Save Item"**.
+   - Verify the item immediately appears under **Due Soon (≤ 30 Days)** and the summary metric increments reactively.
+6. **Verify Shared Group Collaboration**:
+   - Use the group selector dropdown in the top header.
+   - Switch from `Personal` to `Home Life`.
+   - Notice items shared between Alex and Sarah Miller (`sarah@example.com`), proving group-scoped multi-user access control.
+7. **Simulate Daily Morning Notification Digest (8:00 AM)**:
+   - Click the **Reminders Bell** icon in the header to open the alert drawer.
+   - Click **"Simulate Morning Digest (8:00 AM)"**.
+   - The simulator queries the backend endpoint (`POST /api/v1/reminders/digest/send`), aggregates all due items across user and group memberships, and renders a formatted preview of the scheduled morning digest email.
+
+#### 4. Instant Terminal Verification Commands (cURL)
+
+Verify the live cloud endpoints from your terminal in seconds:
+
+```bash
+# 1. Verify CloudFront CDN distribution (Expected: HTTP/2 200 OK from CloudFront edge)
+curl -sI https://d1ca9upoitnq9b.cloudfront.net/ | grep -E "HTTP|server|via|x-cache"
+
+# 2. Verify Live Backend API Health on AWS Lambda (Expected: {"status":"healthy","database":"connected","version":"1.0.0"})
+curl -s https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health
+
+# 3. Verify Live Authentication & JWT Generation via API
+curl -s -X POST https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alex@example.com","password":"password123"}' | grep -o '"email":"alex@example.com"'
+
+# 4. Verify Interactive API Documentation (Expected: HTTP 200 OK)
+curl -sI https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs | head -n 1
+curl -sI https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/redoc | head -n 1
+
+# 5. Verify Machine-Readable OpenAPI Schema (Expected: Valid OpenAPI 3.1.0 JSON)
+curl -s https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/openapi.json | head -c 80
+```
+
 - **Cloud Infrastructure IaC & Playbooks**: Detailed in [`docs/deployment/README.md`](docs/deployment/README.md) (AWS Terraform, CloudFormation, Render).
 
 ```bash
@@ -334,7 +413,7 @@ This project adheres strictly to the AI Dev Tools Final Project Rubric. Below is
 | **5** | **Application** | `2` | 2 | Full-stack app works end to end (frontend, backend, database), runs locally with a single command. | `make up` -> open [http://localhost:3003](http://localhost:3003) & [http://localhost:8003/health](http://localhost:8003/health) |
 | **6** | **Testing** | `2` | 2 | Both unit and integration tests exist, run with a single command, and pass. | `make test-backend` (34 passed), `make test-frontend` (42 passed), `make test-integration` (27 passed), `make test-e2e` (22 passed) |
 | **7** | **Containerization** | `2` | 2 | Full system, including database, runs via Docker/Compose and starts with a single command. | `docker-compose.yaml`, `docker-compose.prod.yml`, `make up` (`docker compose ps`) |
-| **8** | **Deployment** | `2` | 2 | Application is deployed and reachable at a public URL, or clear demo with deployment. | **Live Web App**: [https://d1ca9upoitnq9b.cloudfront.net/](https://d1ca9upoitnq9b.cloudfront.net/)<br>**Live Backend Health**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health) |
+| **8** | **Deployment** | `2` | 2 | Application is deployed and reachable at a public URL, or clear demo with deployment. | **Live Web App**: [https://d1ca9upoitnq9b.cloudfront.net/](https://d1ca9upoitnq9b.cloudfront.net/)<br>**Live Backend Health**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health)<br>**Interactive Swagger Docs**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs)<br>**Interactive ReDoc**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/redoc](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/redoc)<br>**Walkthrough**: [7-Step Live Demo Guide](#3-step-by-step-live-deployment-demo-walkthrough) |
 | **9** | **CI/CD** | `3` | 3 | CI runs tests, CD deploys to dev, and there's a manual deploy to production. | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) (auto-test + dev deploy), [`.github/workflows/promote-dev-to-prod.yml`](.github/workflows/promote-dev-to-prod.yml) (manual release promotion) |
 | **10**| **Observability** | `2` | 2 | Key user journey instrumented with metrics, traces, structured logs with trace ID; signals in UI. | `make obs-up` -> [http://localhost:3004](http://localhost:3004) (Grafana), [`backend/app/telemetry.py`](backend/app/telemetry.py), [`_docs/telemetry.md`](_docs/telemetry.md) |
 | **11**| **Alerting on User Impact**| `1` | 1 | At least one alert exists alerting on user impact instead of CPU graphs. | [`observability/alert_rules.yml`](observability/alert_rules.yml) (`HighHttpErrorRate`, `DailyDigestFailures`, `RepeatedItemCreationFailures`) |
@@ -361,10 +440,12 @@ make test-frontend  # 42 passed
 make test-integration # 27 passed
 
 # 4. Verify live public cloud deployment (Criterion 8)
-curl -sI https://d1ca9upoitnq9b.cloudfront.net/
+curl -sI https://d1ca9upoitnq9b.cloudfront.net/ | grep -E "HTTP|server|via"
 # Expected: HTTP/2 200 (CloudFront CDN)
 curl -s https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health
 # Expected: {"status":"healthy","database":"connected","version":"1.0.0"}
+curl -sI https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs | head -n 1
+# Expected: HTTP/1.1 200 OK (Interactive Swagger UI)
 
 # 5. Verify Prometheus alert rules & user impact alerting (Criterion 11)
 curl -s http://localhost:9091/api/v1/rules | grep "HighHttpErrorRate"

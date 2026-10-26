@@ -124,12 +124,19 @@ aws s3 sync frontend/dist s3://$(terraform -chdir=terraform/aws-serverless outpu
 ---
 
 ### Step 6: Verify Live Deployment
-Open your production CloudFront endpoint:
+Open your production CloudFront and Lambda endpoints:
+
+- **Live Web Application (CloudFront)**: [https://d1ca9upoitnq9b.cloudfront.net/](https://d1ca9upoitnq9b.cloudfront.net/)
+- **Live Backend API Health**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health)
+- **Interactive Swagger Docs**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs)
+
 ```bash
-curl -f https://$(terraform -chdir=terraform/aws-serverless output -raw cloudfront_domain_name)/health
+# Verify Backend Health via Lambda Function URL
+curl -s https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health
+# Expected Output: {"status":"healthy","database":"connected","version":"1.0.0"}
+
+# Verify CloudFront CDN distribution
+curl -sI https://d1ca9upoitnq9b.cloudfront.net/ | grep -E "HTTP|server|via"
+# Expected Output: HTTP/2 200
 ```
-You will receive:
-```json
-{"status":"healthy","database":"connected","version":"1.0.0"}
-```
-Access the full web application at `https://<YOUR_CLOUDFRONT_DOMAIN_NAME>`.
+Access the full web application at [https://d1ca9upoitnq9b.cloudfront.net/](https://d1ca9upoitnq9b.cloudfront.net/). Pre-seeded demo credentials: `alex@example.com` / `password123`.
