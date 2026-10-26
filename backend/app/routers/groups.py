@@ -39,6 +39,7 @@ async def create_group(
 @router.get("/{id}", response_model=Group, status_code=status.HTTP_200_OK)
 async def get_group(
     id: str,
+    current_user: User = Depends(get_current_user_optional),
     store: DatabaseStore = Depends(get_store),
 ) -> Group:
     group = store.get_group_by_id(id)
@@ -46,6 +47,11 @@ async def get_group(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
+        )
+    if not store.is_group_accessible(group, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this group",
         )
     return group
 

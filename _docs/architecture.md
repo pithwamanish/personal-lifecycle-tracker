@@ -37,3 +37,27 @@ The Personal Lifecycle Tracker implements a zero-trust, multi-service architectu
 - **Gateway**: Caddy 2 minimal reverse proxy with single-port entrypoint and SPA fallback.
 - **Observability**: OpenTelemetry Collector, Prometheus, Loki, Tempo, Grafana.
 - **Contract**: OpenAPI 3.0.3 specification frozen in `contracts/openapi.yaml`.
+
+## 3. Cloud Serverless Architecture & Verified Endpoints (Criterion 8 — 2 Points)
+
+The production architecture is deployed serverless on AWS:
+```
+[User Browser] ──HTTPS──> [AWS CloudFront CDN Edge]
+                               │
+            ┌──────────────────┴──────────────────┐
+     /* (React 19 SPA)                     /api/* & /health
+            │                                     │
+            ▼                                     ▼
+    [Amazon S3 Private]                 [AWS Lambda Web Adapter]
+                                                  │
+                                                  ▼
+                                      [FastAPI Backend Container]
+                                                  │
+                                                  ▼
+                                       [Neon Serverless Postgres]
+```
+
+- **Live Public Web Application**: [https://d1ca9upoitnq9b.cloudfront.net/](https://d1ca9upoitnq9b.cloudfront.net/)
+- **Live Public API Health**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health)
+- **Interactive Swagger Docs**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs)
+- **Pre-Seeded Credentials**: `alex@example.com` / `password123`

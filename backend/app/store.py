@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 import os
 import threading
@@ -594,6 +595,28 @@ class DatabaseStore:
             item = session.query(LifecycleItemModel).filter(LifecycleItemModel.id == item_id).first()
             return item.to_lifecycle_item() if item else None
 
+    def is_item_accessible(self, item: LifecycleItem, user: User) -> bool:
+        """Verify whether an item is accessible to a user (owned directly or in a member group)."""
+        if not item.groupId:
+            return item.ownerId == user.id
+        with self.get_session() as session:
+            user_email_lower = user.email.lower()
+            return (
+                session.query(GroupMemberModel)
+                .filter(
+                    GroupMemberModel.group_id == item.groupId,
+                    func.lower(GroupMemberModel.email) == user_email_lower,
+                )
+                .first()
+            ) is not None
+
+    def is_group_accessible(self, group: Group, user: User) -> bool:
+        """Verify whether a group is accessible to a user (owner or member)."""
+        if group.ownerId == user.id:
+            return True
+        user_email_lower = user.email.lower()
+        return user_email_lower in [m.lower() for m in group.memberEmails]
+
     def create_item(self, user: User, data: CreateItemDTO) -> LifecycleItem:
         with self.get_session() as session:
             group_name = None
@@ -635,11 +658,6 @@ class DatabaseStore:
                     due_dt = datetime.fromisoformat(raw_due)
                 else:
                     due_dt = datetime.strptime(raw_due[:10], "%Y-%m-%d")
-
-                # Check if item is already overdue upon creation to evaluate urgency
-                now_dt = datetime.now(timezone.utc) if due_dt.tzinfo else datetime.now()
-                if due_dt < now_dt:
-                    pass
 
                 clean_due = due_dt.strftime("%Y-%m-%d")
 
@@ -722,9 +740,6 @@ class DatabaseStore:
                         due_dt = datetime.fromisoformat(raw_due)
                     else:
                         due_dt = datetime.strptime(raw_due[:10], "%Y-%m-%d")
-                    now_dt = datetime.now(timezone.utc) if due_dt.tzinfo else datetime.now()
-                    if due_dt < now_dt:
-                        pass
                     item.due_date = due_dt.strftime("%Y-%m-%d")
             if data.status is not None:
                 item.status = (
@@ -737,11 +752,27 @@ class DatabaseStore:
             session.commit()
             return item.to_lifecycle_item()
 
-    def toggle_item_completion(self, item_id: str) -> Optional[LifecycleItem]:
+    def toggle_item_completion(self, item_id: str, user: Optional[User] = None) -> Optional[LifecycleItem]:
         with self.get_session() as session:
             item = session.query(LifecycleItemModel).filter(LifecycleItemModel.id == item_id).first()
             if not item:
                 return None
+
+            if user is not None:
+                user_email_lower = user.email.lower()
+                if item.group_id:
+                    is_member = (
+                        session.query(GroupMemberModel)
+                        .filter(
+                            GroupMemberModel.group_id == item.group_id,
+                            func.lower(GroupMemberModel.email) == user_email_lower,
+                        )
+                        .first()
+                    ) is not None
+                    if not is_member:
+                        raise PermissionError("Not authorized to update this shared item")
+                elif item.owner_id != user.id:
+                    raise PermissionError("Not authorized to update this item")
 
             new_status = (
                 ItemStatus.active.value
@@ -1041,18 +1072,24 @@ class DatabaseStore:
         text_lines.append("Note: Reminder channels are always active.")
 
         # Generate HTML
+        escaped_user_name = html.escape(user.name)
+        escaped_subject = html.escape(subject)
+        escaped_tz = html.escape(config.timeZone)
+        delivery_str = config.deliveryTime.value if hasattr(config.deliveryTime, "value") else str(config.deliveryTime)
+        escaped_delivery = html.escape(delivery_str)
+
         html_content = f"""<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>{subject}</title>
+  <title>{escaped_subject}</title>
 </head>
 <body style="font-family: sans-serif; background-color: #f8fafc; padding: 20px;">
   <div style="max-width: 600px; margin: 0 auto; background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; padding: 24px;">
     <h2>Personal Lifecycle Tracker</h2>
-    <p style="color: #64748b;">Daily Digest for {user.name} &bull; {today_str} &bull; {config.deliveryTime} ({config.timeZone})</p>
+    <p style="color: #64748b;">Daily Digest for {escaped_user_name} &bull; {today_str} &bull; {escaped_delivery} ({escaped_tz})</p>
     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;" />
-    <h3>{subject}</h3>
+    <h3>{escaped_subject}</h3>
     <p>Overdue items: {len(reminders.overdue)} | Upcoming items: {len(reminders.upcoming)}</p>
   </div>
 </body>

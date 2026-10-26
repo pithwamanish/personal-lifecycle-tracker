@@ -1,3 +1,4 @@
+// shortcut: Offline mock service retained for local client-only prototyping (Gate 2) and standalone frontend test verification without backend container.
 import { ILifecycleService } from './api';
 import { getItemUrgency, getTodayDateString } from './dateUtils';
 import { buildDailyDigestEmail } from './digestService';

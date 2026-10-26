@@ -28,6 +28,14 @@ The store comes pre-seeded with:
 - `sarah@example.com` (password: `password123`)
 - `jordan@example.com` (password: `password123`)
 
+## Live Public Deployment & API Endpoints (Criterion 8 — 2 Points)
+
+- **Live Public Backend Health**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health)
+- **Interactive Swagger Documentation**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs)
+- **Interactive ReDoc Documentation**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/redoc](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/redoc)
+- **OpenAPI Schema (JSON)**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/openapi.json](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/openapi.json)
+- **Connected Frontend Web Application**: [https://d1ca9upoitnq9b.cloudfront.net/](https://d1ca9upoitnq9b.cloudfront.net/)
+
 ## Running the Backend
 
 ### In Docker

@@ -665,6 +665,8 @@ def init_opentelemetry(app: FastAPI) -> None:
 # -----------------------------------------------------------------------------
 
 UUID_REGEX = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+EMAIL_REGEX = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
+MEMBERS_PATH_REGEX = re.compile(r"(/members/)[^/?#]+")
 
 EXCLUDED_PATHS = {"/metrics", "/favicon.ico"}
 
@@ -673,6 +675,8 @@ def normalize_scope_path(scope: dict) -> str:
     """Extract low-cardinality route template or sanitize dynamic IDs to prevent metric cardinality explosion."""
     raw_path = scope.get("path", "")
     sanitized = UUID_REGEX.sub("{id}", raw_path)
+    sanitized = EMAIL_REGEX.sub("{email}", sanitized)
+    sanitized = MEMBERS_PATH_REGEX.sub(r"\1{memberEmail}", sanitized)
     return sanitized
 
 

@@ -74,6 +74,7 @@ async def create_item(
 @router.get("/{id}", response_model=LifecycleItem, status_code=status.HTTP_200_OK)
 async def get_item(
     id: str,
+    current_user: User = Depends(get_current_user_optional),
     store: DatabaseStore = Depends(get_store),
 ) -> LifecycleItem:
     item = store.get_item_by_id(id)
@@ -81,6 +82,11 @@ async def get_item(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Item not found",
+        )
+    if not store.is_item_accessible(item, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this item",
         )
     return item
 
@@ -134,16 +140,26 @@ async def delete_item(
 @router.post("/{id}/complete", response_model=LifecycleItem, status_code=status.HTTP_200_OK)
 async def toggle_complete(
     id: str,
+    current_user: User = Depends(get_current_user_optional),
     store: DatabaseStore = Depends(get_store),
 ) -> LifecycleItem:
-    updated = store.toggle_item_completion(id)
-    if not updated:
+    item = store.get_item_by_id(id)
+    if not item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Item not found",
         )
-    status_str = updated.status.value if hasattr(updated.status, "value") else str(updated.status)
-    if status_str == "completed":
-        record_item_completed(updated.lifecycleType.value)
-    store.sync_metrics()
-    return updated
+    try:
+        updated = store.toggle_item_completion(id, user=current_user)
+        if not updated:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Item not found",
+            )
+        status_str = updated.status.value if hasattr(updated.status, "value") else str(updated.status)
+        if status_str == "completed":
+            record_item_completed(updated.lifecycleType.value)
+        store.sync_metrics()
+        return updated
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))

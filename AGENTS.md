@@ -228,7 +228,23 @@ VITE_BACKEND_URL=http://backend:8000
 
 ---
 
-## 6. Project Layout
+## 6. Modular Project Documentation
+
+To maintain context precision across AI agent sessions, detailed domain knowledge is partitioned into dedicated modular documents:
+
+- **Agent Team Specification**: [`_docs/team.md`](_docs/team.md) — Squad roles (PM, Architect, Developer, QA, On-Call), responsibilities, and handover protocols.
+- **Development & Operational Process**: [`_docs/process.md`](_docs/process.md) — Formal 12-gate lifecycle, testing pyramid, and promotion gates.
+- **System Architecture & Topology**: [`_docs/architecture.md`](_docs/architecture.md) — Component breakdown, container network layout, and service communication.
+- **Product Functional Specification**: [`product-spec.md`](product-spec.md) — Functional requirements, domain entities, acceptance criteria, and anti-goals.
+- **Implementation Task Backlog**: [`backlog.md`](backlog.md) — Atomic task breakdown, statuses, and verification deliverables.
+- **Observability & Golden Signals**: [`_docs/telemetry.md`](_docs/telemetry.md) — OpenTelemetry tracing, Prometheus metrics, and Loki log correlations.
+- **Security & Permissions Model**: [`docs/permissions.md`](docs/permissions.md) — Tool permissions, least-privilege boundaries, and filesystem confinement.
+- **Interactive Capabilities Demo**: [`docs/demo.md`](docs/demo.md) — 6-step interactive verification script for agent capabilities.
+- **Cloud Deployment & IaC Playbooks**: [`docs/deployment/README.md`](docs/deployment/README.md) — AWS Terraform, CloudFormation, and Render guides.
+
+---
+
+## 7. Project Layout
 
 ```
 .
@@ -273,33 +289,31 @@ VITE_BACKEND_URL=http://backend:8000
 │       ├── aws-terraform.md   # AWS EC2 Docker Compose Terraform guide
 │       └── aws-cloudformation.md # AWS CloudFormation 1-click guide
 ├── cloudformation/
-│   ├── aws-ec2-compose.yaml   # AWS CloudFormation (Dev Environment: 10.1.0.0/16)
-│   └── aws-ec2-compose-prod.yaml # AWS CloudFormation (Production Copy: 10.0.0.0/16)
+│   ├── aws-serverless-lambda.yaml   # AWS CloudFormation Serverless (Dev: Lambda + S3 + CloudFront)
+│   └── aws-serverless-lambda-prod.yaml # AWS CloudFormation Serverless (Production Copy)
 ├── render.yaml                # Render Blueprint (Dev Environment)
 ├── render.prod.yaml           # Render Blueprint (Production Environment Copy)
 ├── terraform/
-│   ├── aws/                   # AWS Terraform (Dev Environment: 10.1.0.0/16)
+│   ├── aws/                   # AWS Terraform Serverless (Dev: Lambda + S3 + CloudFront + ECR)
 │   │   ├── versions.tf
 │   │   ├── variables.tf
-│   │   ├── vpc.tf
-│   │   ├── security_groups.tf
-│   │   ├── iam.tf
-│   │   ├── user_data.sh       # Cloud-init bootstrapper
-│   │   ├── ec2.tf
-│   │   ├── eip.tf
+│   │   ├── lambda.tf
+│   │   ├── s3_cloudfront.tf
+│   │   ├── ecr.tf
 │   │   ├── oidc.tf
+│   │   ├── on-call-responder.tf
+│   │   ├── scheduler.tf
 │   │   ├── outputs.tf
 │   │   └── terraform.tfvars.dev
-│   ├── aws-prod/              # AWS Terraform (Production Environment Copy: 10.0.0.0/16)
+│   ├── aws-prod/              # AWS Terraform Serverless (Production Copy)
 │   │   ├── versions.tf
 │   │   ├── variables.tf
-│   │   ├── vpc.tf
-│   │   ├── security_groups.tf
-│   │   ├── iam.tf
-│   │   ├── user_data.sh
-│   │   ├── ec2.tf
-│   │   ├── eip.tf
+│   │   ├── lambda.tf
+│   │   ├── s3_cloudfront.tf
+│   │   ├── ecr.tf
 │   │   ├── oidc.tf
+│   │   ├── on-call-responder.tf
+│   │   ├── scheduler.tf
 │   │   ├── outputs.tf
 │   │   └── terraform.tfvars.prod
 │   ├── render/                # Render Terraform (Dev Environment: free plan)
@@ -340,7 +354,7 @@ VITE_BACKEND_URL=http://backend:8000
 
 ---
 
-## 7. Cloud Deployment Automation (Dev & Production)
+## 8. Cloud Deployment Automation (Dev & Production)
 
 Execute all validations and formatting inside Docker without host dependencies:
 
@@ -350,12 +364,12 @@ Execute all validations and formatting inside Docker without host dependencies:
   - Validation: `make tf-validate-render` and `make tf-validate-render-prod`
 - **AWS**:
   - Dev Terraform: [`terraform/aws/`](terraform/aws/) | Prod Terraform Copy: [`terraform/aws-prod/`](terraform/aws-prod/)
-  - Dev CloudFormation: [`cloudformation/aws-ec2-compose.yaml`](cloudformation/aws-ec2-compose.yaml) | Prod CloudFormation Copy: [`cloudformation/aws-ec2-compose-prod.yaml`](cloudformation/aws-ec2-compose-prod.yaml)
+  - Dev CloudFormation: [`cloudformation/aws-serverless-lambda.yaml`](cloudformation/aws-serverless-lambda.yaml) | Prod CloudFormation Copy: [`cloudformation/aws-serverless-lambda-prod.yaml`](cloudformation/aws-serverless-lambda-prod.yaml)
   - Validation: `make tf-validate` (validates all Terraform environments) and `make cf-validate` (validates both CloudFormation templates)
 
 ---
 
-## 8. Two-Stage Container Registry Pipeline (Amazon ECR)
+## 9. Two-Stage Container Registry Pipeline (Amazon ECR)
 
 The CI/CD pipeline decouples image creation from serving:
 

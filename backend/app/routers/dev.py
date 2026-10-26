@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+import os
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.models import MessageResponse
 from app.store import DatabaseStore, get_store
@@ -12,5 +13,10 @@ router = APIRouter()
 async def reset_seed(
     store: DatabaseStore = Depends(get_store),
 ) -> MessageResponse:
+    if os.getenv("APP_ENV") == "production":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Seed endpoint is disabled in production",
+        )
     store.seed()
     return MessageResponse(message="Seed data loaded successfully")

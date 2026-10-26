@@ -1,6 +1,15 @@
 import { DailyDigestConfig, DailyDigestEmail, LifecycleItem } from './types';
 import { formatDisplayDate, getRelativeDueDateLabel, getTodayDateString } from './dateUtils';
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export function buildDailyDigestEmail(params: {
   recipientEmail: string;
   recipientName: string;
@@ -60,12 +69,15 @@ export function buildDailyDigestEmail(params: {
   textLines.push(`Note: Reminder channels are always active.`);
 
   // HTML content
+  const safeRecipientName = escapeHtml(recipientName);
+  const safeSubject = escapeHtml(subject);
+  const safeTimeZone = escapeHtml(config.timeZone);
   const htmlContent = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>${subject}</title>
+  <title>${safeSubject}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 24px; }
     .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; overflow: hidden; }
@@ -87,7 +99,7 @@ export function buildDailyDigestEmail(params: {
   <div class="container">
     <div class="header">
       <h1>Personal Lifecycle Tracker</h1>
-      <p>Daily Digest for ${recipientName} &bull; ${todayStr} &bull; ${config.deliveryTime} (${config.timeZone})</p>
+      <p>Daily Digest for ${safeRecipientName} &bull; ${todayStr} &bull; ${config.deliveryTime} (${safeTimeZone})</p>
     </div>
     <div class="content">
       ${
@@ -99,12 +111,12 @@ export function buildDailyDigestEmail(params: {
             (item) => `
           <div class="item-card" style="border-left: 3px solid #ef4444;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span class="item-title">${item.name}</span>
+              <span class="item-title">${escapeHtml(item.name)}</span>
               <span class="badge badge-overdue">${item.lifecycleType}</span>
             </div>
             <div class="item-meta">
               <strong>Due:</strong> ${formatDisplayDate(item.dueDate)} &bull; ${getRelativeDueDateLabel(item.dueDate, item.status, todayStr)}
-              ${item.groupName ? ` &bull; <span>Group: ${item.groupName}</span>` : ' &bull; <span>Personal</span>'}
+              ${item.groupName ? ` &bull; <span>Group: ${escapeHtml(item.groupName)}</span>` : ' &bull; <span>Personal</span>'}
             </div>
           </div>
         `
@@ -123,12 +135,12 @@ export function buildDailyDigestEmail(params: {
             (item) => `
           <div class="item-card" style="border-left: 3px solid #f59e0b;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span class="item-title">${item.name}</span>
+              <span class="item-title">${escapeHtml(item.name)}</span>
               <span class="badge badge-upcoming">${item.lifecycleType}</span>
             </div>
             <div class="item-meta">
               <strong>Due:</strong> ${formatDisplayDate(item.dueDate)} &bull; ${getRelativeDueDateLabel(item.dueDate, item.status, todayStr)}
-              ${item.groupName ? ` &bull; <span>Group: ${item.groupName}</span>` : ' &bull; <span>Personal</span>'}
+              ${item.groupName ? ` &bull; <span>Group: ${escapeHtml(item.groupName)}</span>` : ' &bull; <span>Personal</span>'}
             </div>
           </div>
         `

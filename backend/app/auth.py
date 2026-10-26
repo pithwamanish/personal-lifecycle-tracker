@@ -12,7 +12,16 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.models import User
 
-SECRET_KEY = os.getenv("JWT_SECRET", "personal-lifecycle-tracker-jwt-secret-key-2026")
+DEFAULT_JWT_SECRET = "personal-lifecycle-tracker-jwt-secret-key-2026"
+_jwt_env = os.getenv("JWT_SECRET")
+if os.getenv("APP_ENV") == "production":
+    if not _jwt_env or _jwt_env == DEFAULT_JWT_SECRET:
+        SECRET_KEY = secrets.token_hex(32)
+    else:
+        SECRET_KEY = _jwt_env
+else:
+    SECRET_KEY = _jwt_env or DEFAULT_JWT_SECRET
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
@@ -105,11 +114,19 @@ def get_current_user_optional(
 ) -> User:
     """
     Resolves the authenticated user if Bearer token is provided.
-    If no token is supplied, falls back to the default seed user for dev/demo simplicity.
+    If no token is supplied in development, falls back to the default seed user for dev/demo simplicity.
+    In production, authentication is strictly required.
     If an invalid token is provided, raises 401.
     """
     if credentials and credentials.credentials:
         return _resolve_user_from_token(credentials.credentials)
+
+    if os.getenv("APP_ENV") == "production":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     from app.store import get_store
     default_user = get_store().get_default_user()

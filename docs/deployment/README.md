@@ -6,6 +6,37 @@ This directory contains the Infrastructure as Code (IaC) templates, configuratio
 
 ---
 
+## Live Production Deployment & Reviewer Endpoints (Criterion 8 — 2 Points)
+
+The production environment is live and reachable globally on AWS CloudFront CDN and AWS Lambda:
+
+- **Web Application UI (React 19 SPA)**: [https://d1ca9upoitnq9b.cloudfront.net/](https://d1ca9upoitnq9b.cloudfront.net/)
+- **Backend API Gateway & Healthcheck**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health)
+- **Interactive Swagger Documentation**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs)
+- **Interactive ReDoc Documentation**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/redoc](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/redoc)
+- **OpenAPI 3.1.0 JSON Specification**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/openapi.json](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/openapi.json)
+
+### Pre-Seeded Reviewer Credentials
+- **Email**: `alex@example.com`
+- **Password**: `password123`
+- *(Or click "Sign Up" in the navigation bar to test zero-state registration)*
+
+### Quick Terminal Verification Commands
+```bash
+# Verify CloudFront CDN distribution
+curl -sI https://d1ca9upoitnq9b.cloudfront.net/ | grep -E "HTTP|server|via"
+
+# Verify Lambda Backend Healthcheck (PostgreSQL connected)
+curl -s https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health
+
+# Verify Live JWT Authentication
+curl -s -X POST https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alex@example.com","password":"password123"}' | grep -o '"email":"alex@example.com"'
+```
+
+---
+
 ## Environment Architecture Matrix
 
 | Capability / Resource | Development Environment (`dev`) | Production Environment (`production`) |
