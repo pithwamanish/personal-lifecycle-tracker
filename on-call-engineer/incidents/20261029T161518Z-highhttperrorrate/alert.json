@@ -1,0 +1,32 @@
+{
+  "alert_name": "HighHttpErrorRate",
+  "alert_state": "firing",
+  "severity": "critical",
+  "service_name": "api-backend",
+  "deployment_environment": "development",
+  "service_version": "dev-latest",
+  "summary": "Elevated HTTP 5xx error rate on api-backend",
+  "description": "5xx error rate exceeded 5% threshold (current: 12.50%)",
+  "observed_value": 12.5,
+  "threshold": 5.0,
+  "duration": "1m",
+  "dashboard_url": "http://localhost:3004/d/lifecycle-tracker-overview",
+  "runbook_url": "on-call-engineer/runbook.md#highhttperrorrate",
+  "timestamp": "2026-10-10T17:00:00Z",
+  "labels": {
+    "alertname": "HighHttpErrorRate",
+    "severity": "critical",
+    "service": "api-backend",
+    "environment": "development",
+    "version": "dev-latest"
+  },
+  "annotations": {
+    "summary": "Elevated HTTP 5xx error rate on api-backend",
+    "description": "5xx error rate exceeded 5% threshold (current: 12.50%)",
+    "observed_value": "12.50",
+    "threshold": "5.0",
+    "duration": "1m",
+    "dashboard_url": "http://localhost:3004/d/lifecycle-tracker-overview",
+    "runbook_url": "on-call-engineer/runbook.md#highhttperrorrate"
+  }
+}

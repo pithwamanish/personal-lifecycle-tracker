@@ -1,0 +1,9 @@
+{
+  "incident": "test-simulated",
+  "root_cause": "Synthetic test defect triggered for validation",
+  "fix": "backend/app/main.py",
+  "tests": "pytest passed",
+  "action": "fixed",
+  "summary": "Synthetic incident simulated successfully.",
+  "last_line": "SUMMARY: Synthetic incident simulated successfully."
+}

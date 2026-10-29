@@ -1,0 +1,75 @@
+{
+  "id": "20261029T161518Z-highhttperrorrate",
+  "created_at": "2026-10-29T16:15:18.827389+00:00",
+  "status": "recovered",
+  "alert": {
+    "alert_name": "HighHttpErrorRate",
+    "alert_state": "firing",
+    "severity": "critical",
+    "service_name": "api-backend",
+    "deployment_environment": "development",
+    "service_version": "dev-latest",
+    "summary": "Elevated HTTP 5xx error rate on api-backend",
+    "description": "5xx error rate exceeded 5% threshold (current: 12.50%)",
+    "observed_value": 12.5,
+    "threshold": 5.0,
+    "duration": "1m",
+    "dashboard_url": "http://localhost:3004/d/lifecycle-tracker-overview",
+    "runbook_url": "on-call-engineer/runbook.md#highhttperrorrate",
+    "timestamp": "2026-10-10T17:00:00Z",
+    "labels": {
+      "alertname": "HighHttpErrorRate",
+      "severity": "critical",
+      "service": "api-backend",
+      "environment": "development",
+      "version": "dev-latest"
+    },
+    "annotations": {
+      "summary": "Elevated HTTP 5xx error rate on api-backend",
+      "description": "5xx error rate exceeded 5% threshold (current: 12.50%)",
+      "observed_value": "12.50",
+      "threshold": "5.0",
+      "duration": "1m",
+      "dashboard_url": "http://localhost:3004/d/lifecycle-tracker-overview",
+      "runbook_url": "on-call-engineer/runbook.md#highhttperrorrate"
+    }
+  },
+  "timeline": [
+    {
+      "at": "2026-10-29T16:15:18.827399+00:00",
+      "status": "created",
+      "note": "accepted"
+    },
+    {
+      "at": "2026-10-29T16:15:18.827890+00:00",
+      "status": "gathering_evidence",
+      "note": "collecting telemetry from Prometheus, Loki, Tempo"
+    },
+    {
+      "at": "2026-10-29T16:15:18.872517+00:00",
+      "status": "evidence_gathered",
+      "note": "0 failing routes, 0 error logs"
+    },
+    {
+      "at": "2026-10-29T16:15:18.873624+00:00",
+      "status": "agent_running",
+      "note": "sandboxed headless agent investigating"
+    },
+    {
+      "at": "2026-10-29T16:15:18.874452+00:00",
+      "status": "agent_done",
+      "note": "action=fixed exit=0"
+    },
+    {
+      "at": "2026-10-29T16:15:18.874667+00:00",
+      "status": "redeploying",
+      "note": "rebuilding application container with fix"
+    },
+    {
+      "at": "2026-10-29T16:15:20.053460+00:00",
+      "status": "recovered",
+      "note": "verify-recovery passed; fix awaits human review before commit"
+    }
+  ],
+  "updated_at": "2026-10-29T16:15:20.053460+00:00"
+}

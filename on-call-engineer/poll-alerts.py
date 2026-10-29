@@ -196,8 +196,19 @@ def get_alert_key(normalized):
 
 def pass_to_headless_agent(normalized, agent_cmd=None):
     """
-    Saves incident JSON, renders prompt markdown, and invokes the headless coding agent.
+    Submits incident to responder engine and/or invokes headless coding agent.
     """
+    try:
+        sys.path.insert(0, ON_CALL_DIR)
+        import responder
+        res = responder.dispatcher.submit(normalized, {"alerts": [normalized]})
+        incident_id = res.get("incident_id", "incident")
+        logger.info(f"==> Dispatched incident to on-call responder: id={incident_id}, status={res.get('status')}")
+        log_audit("ALERT_FIRING", f"alert='{normalized['alert_name']}', service='{normalized['service_name']}', severity='{normalized['severity']}', incident_id='{incident_id}'")
+        return incident_id
+    except Exception as e:
+        logger.warning(f"Fallback to legacy dispatch: {e}")
+
     os.makedirs(INCIDENTS_DIR, exist_ok=True)
     ts = int(time.time())
     clean_name = re.sub(r'[^a-zA-Z0-9_-]', '_', normalized["alert_name"])
@@ -256,7 +267,7 @@ def pass_to_headless_agent(normalized, agent_cmd=None):
         logger.error(f"Failed to invoke headless coding agent: {e}")
         log_audit("AGENT_DISPATCH_FAILED", f"alert='{normalized['alert_name']}', error='{e}'")
 
-    return incident_file, prompt_file
+    return incident_file
 
 
 def fetch_ci_failures(limit=3):

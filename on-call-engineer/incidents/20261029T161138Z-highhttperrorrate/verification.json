@@ -1,0 +1,7 @@
+{
+  "paths": [
+    "/health"
+  ],
+  "exit_code": 0,
+  "output": "==> [VERIFY-RECOVERY] Checking endpoint recovery against http://127.0.0.1:8003 (Attempts: 3)...\n  Attempt 1: GET /health -> HTTP 200\nRESULT: RECOVERED\n"
+}
