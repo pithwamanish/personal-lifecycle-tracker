@@ -13,10 +13,10 @@ if [ -z "${STAGED_FILES}" ]; then
   exit 0
 fi
 
-# 1. Check for actual hardcoded secret values (excluding the hook script itself and example/test files)
-SUSPICIOUS_ASSIGNMENTS='(AWS_SECRET_ACCESS_KEY\s*[:=]\s*["'\''][A-Za-z0-9/+=]{16,}["'\'']|ghp_[A-Za-z0-9]{36}|BEGIN (RSA|EC|OPENSSH) PRIVATE KEY)'
-if git diff --cached | grep -v "pre-commit" | grep -v "example" | grep -v "test" | grep -E "${SUSPICIOUS_ASSIGNMENTS}" >/dev/null 2>&1; then
-  echo "SECURITY ERROR: Detected suspected hardcoded secret in staged diff!"
+# 1. Check for actual hardcoded secret values (excluding deletions, the hook script itself, and example/test files)
+SUSPICIOUS_ASSIGNMENTS='(AWS_SECRET_ACCESS_KEY\s*[:=]\s*["'\''][A-Za-z0-9/+=]{16,}["'\'']|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{60,}|glsa_[A-Za-z0-9_]{30,}|glc_[A-Za-z0-9_]{20,}|rnd_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|BEGIN (RSA|EC|DSA|OPENSSH|PGP) PRIVATE KEY)'
+if git diff --cached | grep '^[+]' | grep -v "pre-commit" | grep -v "pre-push" | grep -v "example" | grep -v "test" | grep -E "${SUSPICIOUS_ASSIGNMENTS}" >/dev/null 2>&1; then
+  echo "SECURITY ERROR: Detected suspected hardcoded secret (Grafana/AWS/GitHub/Private Key) in staged diff!"
   echo "Review your staged files before committing."
   exit 1
 fi

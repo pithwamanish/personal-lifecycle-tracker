@@ -37,7 +37,9 @@ setup-hooks:
 	@mkdir -p .git/hooks
 	@cp scripts/pre-commit-security.sh .git/hooks/pre-commit
 	@chmod +x .git/hooks/pre-commit
-	@echo "Git security pre-commit hook installed successfully."
+	@cp scripts/pre-push-security.sh .git/hooks/pre-push
+	@chmod +x .git/hooks/pre-push
+	@echo "Git security pre-commit and pre-push hooks installed successfully."
 
 ps:
 	docker compose ps
