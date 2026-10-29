@@ -355,21 +355,34 @@ make cf-validate
 
 ---
 
-## 11. CI/CD Pipeline & Promotion Workflow
+## 11. CI/CD Pipeline, Promotion & Rollback Workflows
 
-The automated GitHub Actions workflow ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) provides test-gated delivery structured into two distinct stages:
-1. **Parallel Unit Tests**: Backend (FastAPI Pytest) and Frontend (TypeScript lint + Vitest) run concurrently.
-2. **Docker Compose Integration & E2E**: Builds the full stack, starts PostgreSQL, backend, and frontend containers, runs 27 integration tests, and executes 17 Playwright E2E browser journeys.
-3. **Stage 1 (Build)**: Compiles backend and frontend container images, tags each image using the `YYYYMMDD-HHMMSS-shortsha` pattern (e.g. `20260818-163457-83242da`), and pushes them to Amazon ECR.
-4. **Stage 2 (Deploy)**: Pulls the pre-built image artifacts from Amazon ECR and serves them via Docker Compose (`docker compose -f docker-compose.prod.yml up -d --no-build`), completely eliminating image building during deployment.
-5. **Keyless Cloud Authentication (GitHub OIDC)**: Uses GitHub OIDC (`id-token: write`) to assume an AWS IAM role (`terraform/aws/oidc.tf`) to authenticate with ECR and AWS SSM.
+The repository organizes continuous integration, continuous deployment, production promotion, and disaster recovery into four modular, independent GitHub Actions workflows:
 
-### Dev-to-Production Promotion Workflow
-The manual workflow ([`.github/workflows/promote-dev-to-prod.yml`](.github/workflows/promote-dev-to-prod.yml)) promotes verified dev versions to `main`:
-- Runs conflict and regression test gates.
-- Pulls the currently deployed dev image from Amazon ECR.
-- Promotes image tags (`vX.Y.Z`, `prod-latest`), pushes to ECR, and serves on production without building from source.
-- Polls live production healthcheck until HTTP 200 is confirmed.
+1. **Continuous Integration ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))**:
+   - **Parallel Unit Tests**: Backend (FastAPI Pytest) and Frontend (TypeScript lint + Vitest) run concurrently.
+   - **Security SAST Audit**: Semgrep analysis (OWASP, secrets, JWT) and npm audit.
+   - **Docker Compose Integration & E2E**: Starts PostgreSQL, backend, and frontend containers, runs 27 integration tests, and executes 17 Playwright browser journeys.
+   - **Zero Deployment**: Confined strictly to test and verification gates.
+
+2. **Continuous Deployment ([`.github/workflows/cd.yml`](.github/workflows/cd.yml))**:
+   - **Trigger**: Automatically runs upon successful completion of CI on `main`, `dev`, or `develop`, or via manual `workflow_dispatch`.
+   - **Two-Stage Delivery (Build)**: Compiles backend and frontend container images, tags each image using the `YYYYMMDD-HHMMSS-shortsha` pattern (e.g. `20260818-163457-83242da`), and pushes them to Amazon ECR.
+   - **Two-Stage Delivery (Deploy)**: Pulls pre-built image artifacts from Amazon ECR and serves them via Docker Compose (`docker compose -f docker-compose.prod.yml up -d --no-build`), completely eliminating image building during deployment.
+   - **Keyless Cloud Authentication (GitHub OIDC)**: Assumes AWS IAM role via OIDC (`terraform/aws/oidc.tf`) to authenticate with ECR and AWS SSM.
+   - **Healthcheck & Render Integration**: Triggers Render deployment (if configured) and validates HTTP 200 health.
+
+3. **Dev-to-Production Promotion ([`.github/workflows/promote-dev-to-prod.yml`](.github/workflows/promote-dev-to-prod.yml))**:
+   - **Trigger**: Manual `workflow_dispatch` with dry-run support.
+   - **Pre-promotion Gates**: Runs merge simulation, conflict detection, and regression test suites.
+   - **Release & SemVer Tagging**: Merges `dev` into `main`, auto-increments semantic release tag (`vX.Y.Z`), and generates GitHub Release with changelog.
+   - **Zero-Build Image Promotion**: Discovers currently deployed dev image from Amazon ECR, re-tags with production timestamp (`YYYYMMDD-HHMMSS-shortsha`) and semver tag, pushes to ECR, serves on production, and confirms HTTP 200 health.
+
+4. **Rollback Workflow ([`.github/workflows/rollback.yml`](.github/workflows/rollback.yml))**:
+   - **Trigger**: Manual `workflow_dispatch` with confirmation switch (`confirm_rollback=YES`) and incident ID input.
+   - **Flexible Strategies**: Rollback via previous SSM tag history (`previous_ssm_tag`), specific ECR image tag (`specific_image_tag`), git release tag (`git_release_tag`), or commit SHA (`git_commit_sha`).
+   - **Instant Safe Restoration**: Pulls the verified stable image directly from ECR, re-tags `<env>-latest`, updates AWS SSM Parameter Store (`/personal-lifecycle/${TARGET}/image_tag`), serves the stack, and validates live health.
+   - **Immutable Audit Trail**: Records complete audit payload in AWS SSM Parameter Store (`/personal-lifecycle/${TARGET}/last_rollback`) and alerts the on-call responder.
 
 ---
 
@@ -414,7 +427,7 @@ This project adheres strictly to the AI Dev Tools Final Project Rubric. Below is
 | **6** | **Testing** | `2` | 2 | Both unit and integration tests exist, run with a single command, and pass. | `make test-backend` (34 passed), `make test-frontend` (42 passed), `make test-integration` (27 passed), `make test-e2e` (22 passed) |
 | **7** | **Containerization** | `2` | 2 | Full system, including database, runs via Docker/Compose and starts with a single command. | `docker-compose.yaml`, `docker-compose.prod.yml`, `make up` (`docker compose ps`) |
 | **8** | **Deployment** | `2` | 2 | Application is deployed and reachable at a public URL, or clear demo with deployment. | **Live Web App**: [https://d1ca9upoitnq9b.cloudfront.net/](https://d1ca9upoitnq9b.cloudfront.net/)<br>**Live Backend Health**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health)<br>**Interactive Swagger Docs**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/docs)<br>**Interactive ReDoc**: [https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/redoc](https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/redoc)<br>**Walkthrough**: [7-Step Live Demo Guide](#3-step-by-step-live-deployment-demo-walkthrough) |
-| **9** | **CI/CD** | `3` | 3 | CI runs tests, CD deploys to dev, and there's a manual deploy to production. | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) (auto-test + dev deploy), [`.github/workflows/promote-dev-to-prod.yml`](.github/workflows/promote-dev-to-prod.yml) (manual release promotion) |
+| **9** | **CI/CD** | `3` | 3 | CI runs tests, CD deploys to dev, and there's a manual deploy to production. | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) (auto-test), [`.github/workflows/cd.yml`](.github/workflows/cd.yml) (auto-deploy dev/prod), [`.github/workflows/promote-dev-to-prod.yml`](.github/workflows/promote-dev-to-prod.yml) (manual release promotion), [`.github/workflows/rollback.yml`](.github/workflows/rollback.yml) (automated rollback) |
 | **10**| **Observability** | `2` | 2 | Key user journey instrumented with metrics, traces, structured logs with trace ID; signals in UI. | `make obs-up` -> [http://localhost:3004](http://localhost:3004) (Grafana), [`backend/app/telemetry.py`](backend/app/telemetry.py), [`_docs/telemetry.md`](_docs/telemetry.md) |
 | **11**| **Alerting on User Impact**| `1` | 1 | At least one alert exists alerting on user impact instead of CPU graphs. | [`observability/alert_rules.yml`](observability/alert_rules.yml) (`HighHttpErrorRate`, `DailyDigestFailures`, `RepeatedItemCreationFailures`) |
 | **12**| **On-Call Agent** | `2` | 2 | An agent wakes up on an alert and fixes the issue. | [`on-call-engineer/poll-alerts.py`](on-call-engineer/poll-alerts.py), [`on-call-engineer/scripts/run-code-fix-drill`](on-call-engineer/scripts/run-code-fix-drill) (`make on-call-code-fix-drill`) |

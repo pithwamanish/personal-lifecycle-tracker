@@ -229,8 +229,14 @@ cf-status-prod:
 ci-validate:
 	act -n -W .github/workflows/ci.yml
 
+cd-validate:
+	act -n -W .github/workflows/cd.yml
+
 promote-validate:
 	act -n -W .github/workflows/promote-dev-to-prod.yml
+
+rollback-validate:
+	act -n -W .github/workflows/rollback.yml
 
 # On-Call Engineer & Autonomous Incident Response
 on-call-poll:

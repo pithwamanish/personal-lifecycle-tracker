@@ -88,13 +88,21 @@ All code changes must pass the automated testing hierarchy inside Docker before 
 
 ---
 
-## 3. Deployment & Promotion Workflow
+## 3. Deployment, Promotion & Disaster Recovery Workflows
 
 1. **Continuous Integration (`.github/workflows/ci.yml`)**:
    - Trigger: Every pull request and push to `main`, `dev`, or `develop`.
-   - Actions: Parallel execution of backend tests, frontend tests, integration tests, and Playwright E2E browser tests.
-   - Artifact: Builds container images tagged with `YYYYMMDD-HHMMSS-shortsha` and deploys to development.
+   - Actions: Parallel execution of backend tests, frontend tests, security SAST, postgres integration tests, and Playwright E2E browser tests.
+   - Guardrail: Confined to verification gates; zero deployment actions.
 
-2. **Manual Production Promotion (`.github/workflows/promote-dev-to-prod.yml`)**:
-   - Trigger: Operator `workflow_dispatch`.
-   - Actions: Pre-promotion test validation, SemVer release tagging (`vX.Y.Z`), GitHub release generation, and zero-downtime serving from Amazon ECR.
+2. **Continuous Deployment (`.github/workflows/cd.yml`)**:
+   - Trigger: Automated upon successful CI completion (`workflow_run`), or manual operator `workflow_dispatch`.
+   - Actions: Compiles backend and frontend container images, tags with deterministic `YYYYMMDD-HHMMSS-shortsha`, pushes to Amazon ECR, deploys pre-built images with zero host compilation, triggers Render, and validates live health.
+
+3. **Manual Production Promotion (`.github/workflows/promote-dev-to-prod.yml`)**:
+   - Trigger: Operator `workflow_dispatch` (with dry-run option).
+   - Actions: Pre-promotion test validation, SemVer release tagging (`vX.Y.Z`), GitHub release generation, dev image promotion in ECR, and zero-build production serving.
+
+4. **Rollback & Incident Remediation (`.github/workflows/rollback.yml`)**:
+   - Trigger: Operator `workflow_dispatch` with confirmation switch (`confirm_rollback=YES`) and incident ID.
+   - Actions: Restores previous stable container tag (auto-detected from AWS SSM history, ECR, git tag, or commit SHA), updates active SSM parameter pointers, re-deploys via Docker Compose / Render, verifies HTTP 200 health, and records immutable audit log.

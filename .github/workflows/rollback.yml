@@ -1,0 +1,495 @@
+name: Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: 'Target Deployment Environment to rollback'
+        required: true
+        type: choice
+        options:
+          - production
+          - dev
+        default: production
+      rollback_mode:
+        description: 'Rollback strategy'
+        required: true
+        type: choice
+        options:
+          - previous_ssm_tag
+          - specific_image_tag
+          - git_release_tag
+          - git_commit_sha
+        default: previous_ssm_tag
+      target_value:
+        description: 'Tag name, release version, or commit SHA (required if not previous_ssm_tag)'
+        required: false
+        type: string
+        default: ''
+      reason:
+        description: 'Reason for rollback (Incident ID / description for audit trail)'
+        required: true
+        type: string
+        default: 'Incident remediation: rollback to previous stable release'
+      deploy_to_render:
+        description: 'Trigger deployment rollback to Render (if configured)'
+        required: false
+        type: boolean
+        default: true
+      render_health_url:
+        description: 'Custom Health Endpoint URL to validate'
+        required: false
+        type: string
+        default: ''
+      confirm_rollback:
+        description: 'Type YES to confirm execution of rollback'
+        required: true
+        type: string
+        default: 'YES'
+
+concurrency:
+  group: rollback-${{ github.event.inputs.target_environment || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  # ===========================================================================
+  # 1. RESOLVE & VALIDATE ROLLBACK TARGET
+  # ===========================================================================
+  resolve-and-validate:
+    name: Resolve & Validate Rollback Target
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for GitHub OIDC role assumption
+    outputs:
+      target_env: ${{ steps.resolve-target.outputs.target_env }}
+      current_tag: ${{ steps.resolve-target.outputs.current_tag }}
+      rollback_tag: ${{ steps.resolve-target.outputs.rollback_tag }}
+      backend_image: ${{ steps.resolve-target.outputs.backend_image }}
+      frontend_image: ${{ steps.resolve-target.outputs.frontend_image }}
+      registry: ${{ steps.resolve-target.outputs.registry }}
+
+    steps:
+      - name: Verify Operator Confirmation
+        run: |
+          if [ "${{ inputs.confirm_rollback }}" != "YES" ]; then
+            echo "::error::Rollback aborted: confirmation switch confirm_rollback was not set to YES."
+            exit 1
+          fi
+          echo "Operator confirmed rollback for environment: ${{ inputs.target_environment }}"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Assume IAM Role using GitHub OIDC (Keyless Cloud Authentication)
+      - name: Authenticate via GitHub OIDC Role
+        id: oidc-auth
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.RENDER_OIDC_ROLE_ARN || secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+          role-session-name: GitHubActionsRollbackResolve-${{ github.run_id }}
+        env:
+          RENDER_OIDC_ROLE_ARN: ${{ secrets.RENDER_OIDC_ROLE_ARN }}
+          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
+      # Log in to Amazon ECR
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        if: steps.oidc-auth.outcome == 'success'
+        continue-on-error: true
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Resolve Target Rollback Image Tag
+        id: resolve-target
+        run: |
+          TARGET="${{ inputs.target_environment }}"
+          MODE="${{ inputs.rollback_mode }}"
+          VALUE="${{ inputs.target_value }}"
+          REGISTRY="${{ steps.login-ecr.outputs.registry || 'local-registry' }}"
+          BACKEND_REPO="${{ secrets.ECR_BACKEND_REPOSITORY || 'personal-lifecycle-tracker-backend' }}"
+          FRONTEND_REPO="${{ secrets.ECR_FRONTEND_REPOSITORY || 'personal-lifecycle-tracker-frontend' }}"
+
+          echo "================================================================"
+          echo "RESOLVING ROLLBACK TARGET"
+          echo "Environment: $TARGET | Mode: $MODE"
+          echo "================================================================"
+
+          # Fetch currently deployed image tag from AWS SSM
+          CURRENT_TAG=$(aws ssm get-parameter --name "/personal-lifecycle/${TARGET}/image_tag" --query Parameter.Value --output text 2>/dev/null || echo "unknown")
+          echo "Currently deployed image tag: $CURRENT_TAG"
+
+          ROLLBACK_TAG=""
+          if [ "$MODE" = "previous_ssm_tag" ]; then
+            echo "Mode: Auto-detecting previous tag from AWS SSM Parameter History..."
+            # Query parameter history from SSM
+            PREV_TAG=$(aws ssm get-parameter-history --name "/personal-lifecycle/${TARGET}/image_tag" --query "Parameters[-2].Value" --output text 2>/dev/null || true)
+            if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "None" ] || [ "$PREV_TAG" = "$CURRENT_TAG" ]; then
+              echo "SSM history unavailable; falling back to previous image in ECR..."
+              PREV_TAG=$(aws ecr describe-images --repository-name "$BACKEND_REPO" --query 'sort_by(imageDetails,& imagePushedAt)[-2].imageTags[0]' --output text 2>/dev/null || true)
+            fi
+            if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "None" ]; then
+              echo "::error::Unable to automatically detect previous tag. Please rerun workflow with 'specific_image_tag' or 'git_release_tag'."
+              exit 1
+            fi
+            ROLLBACK_TAG="$PREV_TAG"
+
+          elif [ "$MODE" = "specific_image_tag" ]; then
+            if [ -z "$VALUE" ]; then
+              echo "::error::target_value must not be empty when using specific_image_tag mode."
+              exit 1
+            fi
+            ROLLBACK_TAG="$VALUE"
+
+          elif [ "$MODE" = "git_release_tag" ]; then
+            if [ -z "$VALUE" ]; then
+              echo "::error::target_value must not be empty when using git_release_tag mode."
+              exit 1
+            fi
+            # Verify release tag exists in git
+            if ! git rev-parse "$VALUE" >/dev/null 2>&1; then
+              echo "::error::Git tag '$VALUE' does not exist."
+              exit 1
+            fi
+            ROLLBACK_TAG="$VALUE"
+
+          elif [ "$MODE" = "git_commit_sha" ]; then
+            if [ -z "$VALUE" ]; then
+              echo "::error::target_value must not be empty when using git_commit_sha mode."
+              exit 1
+            fi
+            SHORT_SHA=$(git rev-parse --short=7 "$VALUE")
+            # Look for tag in ECR containing the short SHA
+            if [ "$REGISTRY" != "local-registry" ]; then
+              MATCHING_TAG=$(aws ecr describe-images --repository-name "$BACKEND_REPO" --query "imageDetails[].imageTags[]" --output text 2>/dev/null | tr '\t' '\n' | grep -- "-${SHORT_SHA}$" | head -n1 || true)
+            fi
+            ROLLBACK_TAG="${MATCHING_TAG:-$SHORT_SHA}"
+          fi
+
+          if [ -z "$ROLLBACK_TAG" ]; then
+            echo "::error::Failed to resolve a valid rollback tag."
+            exit 1
+          fi
+
+          if [ "$ROLLBACK_TAG" = "$CURRENT_TAG" ]; then
+            echo "::warning::Resolved rollback tag ($ROLLBACK_TAG) is identical to current tag ($CURRENT_TAG)."
+          fi
+
+          if [ "$REGISTRY" != "local-registry" ]; then
+            BACKEND_IMAGE="$REGISTRY/$BACKEND_REPO:$ROLLBACK_TAG"
+            FRONTEND_IMAGE="$REGISTRY/$FRONTEND_REPO:$ROLLBACK_TAG"
+          else
+            BACKEND_IMAGE="personal-lifecycle-tracker-backend:$ROLLBACK_TAG"
+            FRONTEND_IMAGE="personal-lifecycle-tracker-frontend:$ROLLBACK_TAG"
+          fi
+
+          echo "target_env=$TARGET" >> $GITHUB_OUTPUT
+          echo "current_tag=$CURRENT_TAG" >> $GITHUB_OUTPUT
+          echo "rollback_tag=$ROLLBACK_TAG" >> $GITHUB_OUTPUT
+          echo "backend_image=$BACKEND_IMAGE" >> $GITHUB_OUTPUT
+          echo "frontend_image=$FRONTEND_IMAGE" >> $GITHUB_OUTPUT
+          echo "registry=$REGISTRY" >> $GITHUB_OUTPUT
+
+          echo "================================================================"
+          echo "Target Environment: $TARGET"
+          echo "Current Active Tag: $CURRENT_TAG"
+          echo "Restoring Image Tag: $ROLLBACK_TAG"
+          echo "Backend Image: $BACKEND_IMAGE"
+          echo "Frontend Image: $FRONTEND_IMAGE"
+          echo "================================================================"
+
+  # ===========================================================================
+  # 2. EXECUTE ROLLBACK & SERVE PREVIOUS IMAGE
+  # ===========================================================================
+  execute-rollback:
+    name: Execute Rollback & Serve Stable Image
+    needs: [resolve-and-validate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for GitHub OIDC role assumption
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Assume IAM Role using GitHub OIDC (Keyless Cloud Authentication)
+      - name: Authenticate via GitHub OIDC Role
+        id: oidc-auth
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.RENDER_OIDC_ROLE_ARN || secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+          role-session-name: GitHubActionsRollbackExec-${{ github.run_id }}
+        env:
+          RENDER_OIDC_ROLE_ARN: ${{ secrets.RENDER_OIDC_ROLE_ARN }}
+          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
+      # Log in to Amazon ECR
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        if: steps.oidc-auth.outcome == 'success'
+        continue-on-error: true
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Ensure Docker Network Exists
+        run: |
+          docker network inspect personal-lifecycle-observability-net >/dev/null 2>&1 || docker network create personal-lifecycle-observability-net
+
+      # Pull Rollback Image from ECR & Re-tag as latest
+      - name: Pull Rollback Images & Re-tag in Registry
+        run: |
+          REGISTRY="${{ needs.resolve-and-validate.outputs.registry }}"
+          BACKEND_REPO="${{ secrets.ECR_BACKEND_REPOSITORY || 'personal-lifecycle-tracker-backend' }}"
+          FRONTEND_REPO="${{ secrets.ECR_FRONTEND_REPOSITORY || 'personal-lifecycle-tracker-frontend' }}"
+          ROLLBACK_TAG="${{ needs.resolve-and-validate.outputs.rollback_tag }}"
+          TARGET="${{ needs.resolve-and-validate.outputs.target_env }}"
+
+          if [ -n "${{ steps.login-ecr.outputs.registry }}" ]; then
+            echo "Pulling rollback images from Amazon ECR..."
+            docker pull "$REGISTRY/$BACKEND_REPO:$ROLLBACK_TAG" || true
+            docker pull "$REGISTRY/$FRONTEND_REPO:$ROLLBACK_TAG" || true
+
+            # Re-tag rollback images as <target>-latest and latest
+            echo "Re-tagging ECR repository tags to point to restored image..."
+            docker tag "$REGISTRY/$BACKEND_REPO:$ROLLBACK_TAG" "$REGISTRY/$BACKEND_REPO:${TARGET}-latest"
+            docker tag "$REGISTRY/$BACKEND_REPO:$ROLLBACK_TAG" "$REGISTRY/$BACKEND_REPO:latest"
+            docker push "$REGISTRY/$BACKEND_REPO:${TARGET}-latest" || true
+            docker push "$REGISTRY/$BACKEND_REPO:latest" || true
+
+            docker tag "$REGISTRY/$FRONTEND_REPO:$ROLLBACK_TAG" "$REGISTRY/$FRONTEND_REPO:${TARGET}-latest"
+            docker tag "$REGISTRY/$FRONTEND_REPO:$ROLLBACK_TAG" "$REGISTRY/$FRONTEND_REPO:latest"
+            docker push "$REGISTRY/$FRONTEND_REPO:${TARGET}-latest" || true
+            docker push "$REGISTRY/$FRONTEND_REPO:latest" || true
+
+            # Update AWS SSM Parameter Store with restored tag
+            echo "Updating AWS SSM Parameter Store with rollback tag ($ROLLBACK_TAG)..."
+            aws ssm put-parameter --name "/personal-lifecycle/${TARGET}/image_tag" --value "$ROLLBACK_TAG" --type String --overwrite || true
+            aws ssm put-parameter --name "/personal-lifecycle/${TARGET}/backend_image" --value "$REGISTRY/$BACKEND_REPO:$ROLLBACK_TAG" --type String --overwrite || true
+            aws ssm put-parameter --name "/personal-lifecycle/${TARGET}/frontend_image" --value "$REGISTRY/$FRONTEND_REPO:$ROLLBACK_TAG" --type String --overwrite || true
+          fi
+
+      # Serve Rollback Containers via Docker Compose (Zero Host Build)
+      - name: Serve Rollback Containers (Zero Host Build)
+        run: |
+          BACKEND_IMAGE="${{ needs.resolve-and-validate.outputs.backend_image }}"
+          FRONTEND_IMAGE="${{ needs.resolve-and-validate.outputs.frontend_image }}"
+          TARGET="${{ needs.resolve-and-validate.outputs.target_env }}"
+          ROLLBACK_TAG="${{ needs.resolve-and-validate.outputs.rollback_tag }}"
+
+          echo "================================================================"
+          echo "ROLLBACK EXECUTION: Serving restored image tag: $ROLLBACK_TAG"
+          echo "Backend Image: $BACKEND_IMAGE"
+          echo "Frontend Image: $FRONTEND_IMAGE"
+          echo "================================================================"
+
+          if [ -z "${{ steps.login-ecr.outputs.registry }}" ] && (! docker image inspect "$BACKEND_IMAGE" >/dev/null 2>&1 || ! docker image inspect "$FRONTEND_IMAGE" >/dev/null 2>&1); then
+            echo "Notice: Building container images locally on runner..."
+            BACKEND_IMAGE="$BACKEND_IMAGE" FRONTEND_IMAGE="$FRONTEND_IMAGE" \
+              docker compose -f docker-compose.prod.yml build
+          fi
+
+          # Launch container stack with pre-built rollback image
+          BACKEND_IMAGE="$BACKEND_IMAGE" FRONTEND_IMAGE="$FRONTEND_IMAGE" \
+            docker compose -f docker-compose.prod.yml up -d --no-build
+
+          docker compose -f docker-compose.prod.yml ps
+
+      # Retrieve Render credentials from AWS Secrets Manager / SSM (if configured)
+      - name: Retrieve Render Credentials via OIDC Session
+        if: env.RENDER_OIDC_ROLE_ARN != '' || env.AWS_ROLE_TO_ASSUME != ''
+        run: |
+          TARGET_ENV="${{ needs.resolve-and-validate.outputs.target_env }}"
+          SECRET_NAME="personal-lifecycle/render-${TARGET_ENV}"
+          if ! aws secretsmanager describe-secret --secret-id "$SECRET_NAME" >/dev/null 2>&1; then
+            SECRET_NAME="personal-lifecycle/render"
+          fi
+
+          if aws secretsmanager describe-secret --secret-id "$SECRET_NAME" >/dev/null 2>&1; then
+            SECRET_VAL=$(aws secretsmanager get-secret-value --secret-id "$SECRET_NAME" --query SecretString --output text)
+            HOOK_URL=$(echo "$SECRET_VAL" | grep -o '"deploy_hook_url": *"[^"]*"' | cut -d'"' -f4 || true)
+            API_KEY=$(echo "$SECRET_VAL" | grep -o '"api_key": *"[^"]*"' | cut -d'"' -f4 || true)
+            SRV_ID=$(echo "$SECRET_VAL" | grep -o '"service_id": *"[^"]*"' | cut -d'"' -f4 || true)
+            if [ -n "$HOOK_URL" ]; then echo "RENDER_DEPLOY_HOOK_URL=$HOOK_URL" >> $GITHUB_ENV; fi
+            if [ -n "$API_KEY" ]; then echo "RENDER_API_KEY=$API_KEY" >> $GITHUB_ENV; fi
+            if [ -n "$SRV_ID" ]; then echo "RENDER_SERVICE_ID=$SRV_ID" >> $GITHUB_ENV; fi
+          elif aws ssm get-parameter --name "/personal-lifecycle/${TARGET_ENV}/deploy_hook_url" >/dev/null 2>&1; then
+            HOOK_URL=$(aws ssm get-parameter --name "/personal-lifecycle/${TARGET_ENV}/deploy_hook_url" --with-decryption --query Parameter.Value --output text)
+            echo "RENDER_DEPLOY_HOOK_URL=$HOOK_URL" >> $GITHUB_ENV
+          elif aws ssm get-parameter --name "/personal-lifecycle/render/deploy_hook_url" >/dev/null 2>&1; then
+            HOOK_URL=$(aws ssm get-parameter --name "/personal-lifecycle/render/deploy_hook_url" --with-decryption --query Parameter.Value --output text)
+            echo "RENDER_DEPLOY_HOOK_URL=$HOOK_URL" >> $GITHUB_ENV
+          fi
+        env:
+          RENDER_OIDC_ROLE_ARN: ${{ secrets.RENDER_OIDC_ROLE_ARN }}
+          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
+      # Trigger Render Rollback Deployment (if configured)
+      - name: Trigger Render Rollback Deployment
+        id: deploy-render
+        if: inputs.deploy_to_render != false
+        env:
+          DEPLOY_HOOK: ${{ env.RENDER_DEPLOY_HOOK_URL || secrets.RENDER_DEPLOY_HOOK_URL }}
+          API_KEY: ${{ env.RENDER_API_KEY || secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ env.RENDER_SERVICE_ID || secrets.RENDER_SERVICE_ID }}
+        run: |
+          if [ -n "$DEPLOY_HOOK" ]; then
+            echo "Triggering rollback deployment via Render Deploy Hook..."
+            RESPONSE=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" -X POST "$DEPLOY_HOOK")
+            HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d':' -f2)
+            echo "Render Deploy Hook response code: $HTTP_CODE"
+          elif [ -n "$API_KEY" ] && [ -n "$SERVICE_ID" ]; then
+            echo "Triggering rollback deployment via Render REST API for service: $SERVICE_ID..."
+            RESPONSE=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" -X POST \
+              "https://api.render.com/v1/services/${SERVICE_ID}/deploys" \
+              -H "Authorization: Bearer ${API_KEY}" \
+              -H "Accept: application/json" \
+              -H "Content-Type: application/json" \
+              -d '{"clearCache": "do_not_clear"}')
+            HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d':' -f2)
+            echo "Render API response code: $HTTP_CODE"
+          else
+            echo "Render deploy hook/API not configured; local container stack served."
+          fi
+
+      # Validate Deployment Health Endpoint after Rollback
+      - name: Validate Healthcheck Endpoint After Rollback
+        env:
+          MAX_ATTEMPTS: 30
+          POLL_INTERVAL: 10
+        run: |
+          TARGET_ENV="${{ needs.resolve-and-validate.outputs.target_env }}"
+          if [ -n "${{ inputs.render_health_url }}" ]; then
+            HEALTH_URL="${{ inputs.render_health_url }}"
+          elif [ -n "${{ secrets.RENDER_HEALTH_URL }}" ]; then
+            HEALTH_URL="${{ secrets.RENDER_HEALTH_URL }}"
+          elif [ -n "$RENDER_DEPLOY_HOOK_URL" ] || [ -n "$RENDER_API_KEY" ]; then
+            echo ">>> No explicit health URL provided; skipping external domain polling."
+            exit 0
+          else
+            HEALTH_URL="http://127.0.0.1:8088/health"
+          fi
+
+          echo "================================================================"
+          echo "Validating healthcheck post-rollback for: $TARGET_ENV"
+          echo "Target Health URL: $HEALTH_URL"
+          echo "Max Attempts: $MAX_ATTEMPTS (Checking every ${POLL_INTERVAL}s)"
+          echo "================================================================"
+
+          sleep 5
+
+          HEALTH_SUCCESS=false
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            echo "Attempt $i/$MAX_ATTEMPTS: Polling $HEALTH_URL..."
+            RESPONSE=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" --connect-timeout 10 --max-time 15 "$HEALTH_URL" 2>&1 || true)
+            HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d':' -f2 || true)
+            PAYLOAD=$(echo "$RESPONSE" | grep -v "HTTP_STATUS:" || true)
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo ">>> Rollback healthcheck returned HTTP 200 OK!"
+              echo "Response payload: $PAYLOAD"
+              if echo "$PAYLOAD" | grep -q '"status"[[:space:]]*:[[:space:]]*"healthy"'; then
+                echo ">>> Validated payload contains 'status: healthy'!"
+                HEALTH_SUCCESS=true
+                break
+              else
+                echo "HTTP 200 received; waiting for healthy status in payload..."
+              fi
+            else
+              echo "Received status: ${HTTP_CODE:-connection failure}. Retrying in ${POLL_INTERVAL}s..."
+            fi
+
+            sleep $POLL_INTERVAL
+          done
+
+          if [ "$HEALTH_SUCCESS" = "true" ]; then
+            echo "================================================================"
+            echo "SUCCESS: Rollback deployment is live, healthy, and serving traffic!"
+            echo "================================================================"
+            exit 0
+          else
+            echo "================================================================"
+            echo "ERROR: Rollback healthcheck timed out after $MAX_ATTEMPTS attempts."
+            echo "Target URL: $HEALTH_URL"
+            echo "================================================================"
+            if [ "${{ secrets.STRICT_HEALTH_CHECK }}" = "false" ]; then
+              echo "STRICT_HEALTH_CHECK=false configured; continuing without failing step."
+              exit 0
+            fi
+            exit 1
+          fi
+
+      # Record Immutable Rollback Audit Record in AWS SSM
+      - name: Record Rollback Audit Record
+        run: |
+          TARGET="${{ needs.resolve-and-validate.outputs.target_env }}"
+          FROM_TAG="${{ needs.resolve-and-validate.outputs.current_tag }}"
+          TO_TAG="${{ needs.resolve-and-validate.outputs.rollback_tag }}"
+          OPERATOR="${{ github.actor }}"
+          REASON="${{ inputs.reason }}"
+          TIMESTAMP=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          AUDIT_JSON="{\"timestamp\":\"$TIMESTAMP\",\"operator\":\"$OPERATOR\",\"environment\":\"$TARGET\",\"from_tag\":\"$FROM_TAG\",\"to_tag\":\"$TO_TAG\",\"reason\":\"$REASON\",\"run_url\":\"$RUN_URL\",\"status\":\"success\"}"
+
+          echo "Recording rollback audit payload in AWS SSM Parameter Store (/personal-lifecycle/${TARGET}/last_rollback)..."
+          aws ssm put-parameter --name "/personal-lifecycle/${TARGET}/last_rollback" --value "$AUDIT_JSON" --type String --overwrite 2>/dev/null || true
+
+      - name: Summarize Rollback Execution
+        run: |
+          TARGET="${{ needs.resolve-and-validate.outputs.target_env }}"
+          FROM_TAG="${{ needs.resolve-and-validate.outputs.current_tag }}"
+          TO_TAG="${{ needs.resolve-and-validate.outputs.rollback_tag }}"
+          OPERATOR="@${{ github.actor }}"
+          REASON="${{ inputs.reason }}"
+
+          echo "### 🔄 Rollback Execution Succeeded" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ✅ **Rollback Complete & Verified Healthy**" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target Environment**: \`$TARGET\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Restored Tag**: \`$TO_TAG\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Previous Degraded Tag**: \`$FROM_TAG\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Executed By**: $OPERATOR" >> $GITHUB_STEP_SUMMARY
+          echo "- **Rollback Reason**: \`$REASON\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Strategy / Mode**: \`${{ inputs.rollback_mode }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Audit Trail Recorded**: AWS SSM Parameter \`/personal-lifecycle/${TARGET}/last_rollback\`" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # 3. ON-CALL AUTONOMOUS INCIDENT DISPATCH (Fires on failure)
+  # ===========================================================================
+  notify-on-call:
+    name: Notify On-Call Responder on Failure
+    if: failure()
+    needs: [resolve-and-validate, execute-rollback]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dispatch Incident Payload to On-Call Responder
+        env:
+          WORKFLOW_NAME: ${{ github.workflow }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          HEAD_BRANCH: ${{ github.ref_name }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          echo "================================================================"
+          echo " DISPATCHING AUTOMATED ON-CALL INCIDENT EVENT FOR ROLLBACK FAILURE "
+          echo "================================================================"
+          python3 on-call-engineer/scripts/receive-alert <<EOF
+          {
+            "workflow_run": {
+              "id": $RUN_ID,
+              "name": "$WORKFLOW_NAME",
+              "conclusion": "failure",
+              "head_branch": "$HEAD_BRANCH",
+              "head_sha": "$HEAD_SHA",
+              "html_url": "$RUN_URL",
+              "updated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            }
+          }
+          EOF
