@@ -354,10 +354,20 @@ jobs:
           ref: ${{ inputs.target_branch }}
           fetch-depth: 0
 
+      - name: Check AWS Cloud Credentials Availability
+        id: check-aws
+        run: |
+          if [ -n "${{ secrets.RENDER_OIDC_ROLE_ARN }}" ] || [ -n "${{ secrets.AWS_ROLE_TO_ASSUME }}" ]; then
+            echo "has_aws_creds=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_aws_creds=false" >> $GITHUB_OUTPUT
+            echo "No AWS OIDC Role configured in secrets."
+          fi
+
       # Keyless Cloud Authentication (GitHub OIDC -> AWS STS)
       - name: Authenticate via GitHub OIDC Role
         id: oidc-auth
-        if: ${{ secrets.RENDER_OIDC_ROLE_ARN != '' || secrets.AWS_ROLE_TO_ASSUME != '' }}
+        if: steps.check-aws.outputs.has_aws_creds == 'true'
         continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -521,7 +531,7 @@ jobs:
 
       # Retrieve Production Render Credentials from Secrets Manager / SSM (if configured)
       - name: Retrieve Production Render Credentials
-        if: env.RENDER_OIDC_ROLE_ARN != '' || env.AWS_ROLE_TO_ASSUME != ''
+        if: steps.check-aws.outputs.has_aws_creds == 'true'
         run: |
           echo "Searching for Production Render credentials in AWS Secrets Manager..."
           SECRET_NAME="personal-lifecycle/render-production"

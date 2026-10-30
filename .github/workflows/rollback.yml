@@ -83,10 +83,19 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check AWS Cloud Credentials Availability
+        id: check-aws
+        run: |
+          if [ -n "${{ secrets.RENDER_OIDC_ROLE_ARN }}" ] || [ -n "${{ secrets.AWS_ROLE_TO_ASSUME }}" ]; then
+            echo "has_aws_creds=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_aws_creds=false" >> $GITHUB_OUTPUT
+          fi
+
       # Assume IAM Role using GitHub OIDC (Keyless Cloud Authentication)
       - name: Authenticate via GitHub OIDC Role
         id: oidc-auth
-        if: ${{ secrets.RENDER_OIDC_ROLE_ARN != '' || secrets.AWS_ROLE_TO_ASSUME != '' }}
+        if: steps.check-aws.outputs.has_aws_creds == 'true'
         continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -217,10 +226,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check AWS Cloud Credentials Availability
+        id: check-aws
+        run: |
+          if [ -n "${{ secrets.RENDER_OIDC_ROLE_ARN }}" ] || [ -n "${{ secrets.AWS_ROLE_TO_ASSUME }}" ]; then
+            echo "has_aws_creds=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_aws_creds=false" >> $GITHUB_OUTPUT
+          fi
+
       # Assume IAM Role using GitHub OIDC (Keyless Cloud Authentication)
       - name: Authenticate via GitHub OIDC Role
         id: oidc-auth
-        if: ${{ secrets.RENDER_OIDC_ROLE_ARN != '' || secrets.AWS_ROLE_TO_ASSUME != '' }}
+        if: steps.check-aws.outputs.has_aws_creds == 'true'
         continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -303,7 +321,7 @@ jobs:
 
       # Retrieve Render credentials from AWS Secrets Manager / SSM (if configured)
       - name: Retrieve Render Credentials via OIDC Session
-        if: env.RENDER_OIDC_ROLE_ARN != '' || env.AWS_ROLE_TO_ASSUME != ''
+        if: steps.check-aws.outputs.has_aws_creds == 'true'
         run: |
           TARGET_ENV="${{ needs.resolve-and-validate.outputs.target_env }}"
           SECRET_NAME="personal-lifecycle/render-${TARGET_ENV}"

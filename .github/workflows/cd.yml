@@ -112,10 +112,21 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Check AWS Cloud Credentials Availability
+        id: check-aws
+        run: |
+          if [ -n "${{ secrets.AWS_ROLE_TO_ASSUME }}" ] || [ -n "${{ secrets.RENDER_OIDC_ROLE_ARN }}" ]; then
+            echo "has_aws_creds=true" >> $GITHUB_OUTPUT
+            echo "AWS OIDC Role detected. Enabling remote registry build."
+          else
+            echo "has_aws_creds=false" >> $GITHUB_OUTPUT
+            echo "No AWS OIDC Role configured in secrets. Building container images locally."
+          fi
+
       # Assume IAM Role using GitHub OIDC (Keyless Cloud Authentication)
       - name: Authenticate via GitHub OIDC Role
         id: oidc-auth
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' || secrets.RENDER_OIDC_ROLE_ARN != '' }}
+        if: steps.check-aws.outputs.has_aws_creds == 'true'
         continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -239,9 +250,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check AWS Cloud Credentials Availability
+        id: check-aws
+        run: |
+          if [ -n "${{ secrets.AWS_ROLE_TO_ASSUME }}" ] || [ -n "${{ secrets.RENDER_OIDC_ROLE_ARN }}" ]; then
+            echo "has_aws_creds=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_aws_creds=false" >> $GITHUB_OUTPUT
+            echo "No AWS OIDC Role configured in secrets. Serving local container stack."
+          fi
+
       - name: Authenticate via GitHub OIDC Role
         id: oidc-auth
-        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' || secrets.RENDER_OIDC_ROLE_ARN != '' }}
+        if: steps.check-aws.outputs.has_aws_creds == 'true'
         continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -300,7 +321,7 @@ jobs:
 
       # Retrieve Render credentials from AWS Secrets Manager / SSM (if configured)
       - name: Retrieve Render Credentials via OIDC Session
-        if: env.RENDER_OIDC_ROLE_ARN != '' || env.AWS_ROLE_TO_ASSUME != ''
+        if: steps.check-aws.outputs.has_aws_creds == 'true'
         run: |
           TARGET_ENV="${{ needs.build-and-push-ecr.outputs.target_env }}"
           echo "Checking for Render credentials in AWS Secrets Manager for environment: $TARGET_ENV..."
