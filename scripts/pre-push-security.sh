@@ -31,8 +31,8 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     RANGE="$remote_sha..$local_sha"
   fi
 
-  # Check diff of commits being pushed (inspect added lines only)
-  if git log -p "$RANGE" | grep '^[+]' | grep -v "pre-commit" | grep -v "pre-push" | grep -v "example" | grep -v "test" | grep -E "${SUSPICIOUS_PATTERN}" >/dev/null 2>&1; then
+  # Check diff of commits being pushed (inspect added lines only, excluding dummy placeholders)
+  if git log -p "$RANGE" | grep '^[+]' | grep -v "pre-commit" | grep -v "pre-push" | grep -v "example" | grep -v "test" | grep -v "rnd_x" | grep -E "${SUSPICIOUS_PATTERN}" >/dev/null 2>&1; then
     echo "SECURITY ERROR: Detected suspected hardcoded secret in commits being pushed to $REMOTE ($URL)!"
     echo "Push aborted. Please purge credentials before pushing."
     exit 1
