@@ -1,0 +1,2 @@
+{"type": "system", "subtype": "init", "model": "simulation-model"}
+{"type": "result", "result": "INCIDENT: test-simulated\nROOT_CAUSE: Synthetic test defect triggered for validation\nFIX: backend/app/main.py\nTESTS: pytest passed\nACTION: fixed\nSUMMARY: Synthetic incident simulated successfully.", "total_cost_usd": 0.0, "num_turns": 1}

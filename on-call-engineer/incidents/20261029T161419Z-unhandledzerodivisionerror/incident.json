@@ -1,0 +1,62 @@
+{
+  "id": "20261029T161419Z-unhandledzerodivisionerror",
+  "created_at": "2026-10-29T16:14:19.791307+00:00",
+  "status": "recovered",
+  "alert": {
+    "status": "firing",
+    "labels": {
+      "alertname": "UnhandledZeroDivisionError",
+      "severity": "critical",
+      "service": "api-backend",
+      "environment": "development",
+      "version": "dev-latest",
+      "route": "/api/v1/items/drill-check"
+    },
+    "annotations": {
+      "summary": "Unhandled ZeroDivisionError in items drill-check endpoint",
+      "description": "5xx error rate spiked on /api/v1/items/drill-check; endpoint throwing unhandled exception",
+      "observed_value": "500",
+      "threshold": "1",
+      "dashboard_url": "http://localhost:3004/d/lifecycle-tracker-overview",
+      "runbook_url": "on-call-engineer/runbook.md#highhttperrorrate"
+    }
+  },
+  "timeline": [
+    {
+      "at": "2026-10-29T16:14:19.791317+00:00",
+      "status": "created",
+      "note": "accepted"
+    },
+    {
+      "at": "2026-10-29T16:14:19.800120+00:00",
+      "status": "gathering_evidence",
+      "note": "collecting telemetry from Prometheus, Loki, Tempo"
+    },
+    {
+      "at": "2026-10-29T16:14:19.858323+00:00",
+      "status": "evidence_gathered",
+      "note": "0 failing routes, 0 error logs"
+    },
+    {
+      "at": "2026-10-29T16:14:19.859363+00:00",
+      "status": "agent_running",
+      "note": "sandboxed headless agent investigating"
+    },
+    {
+      "at": "2026-10-29T16:14:19.861024+00:00",
+      "status": "agent_done",
+      "note": "action=fixed exit=0"
+    },
+    {
+      "at": "2026-10-29T16:14:19.861336+00:00",
+      "status": "redeploying",
+      "note": "rebuilding application container with fix"
+    },
+    {
+      "at": "2026-10-29T16:14:27.026587+00:00",
+      "status": "recovered",
+      "note": "verify-recovery passed; fix awaits human review before commit"
+    }
+  ],
+  "updated_at": "2026-10-29T16:14:27.026587+00:00"
+}

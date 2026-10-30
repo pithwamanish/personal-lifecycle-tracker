@@ -22,6 +22,13 @@ from app.telemetry import (
 router = APIRouter()
 
 
+@router.get("/drill-check", status_code=status.HTTP_200_OK)
+async def drill_check():
+    """Incident drill endpoint verifying automated on-call recovery."""
+    return {"status": "operational", "service": "items-api"}
+
+
+
 @router.get("", response_model=List[LifecycleItem], status_code=status.HTTP_200_OK)
 async def list_items(
     groupId: Optional[str] = Query(None, description="Filter by groupId ('null' for personal items)"),

@@ -253,8 +253,10 @@ To maintain context precision across AI agent sessions, detailed domain knowledg
 ├── Makefile                   # Docker Compose & containerized IaC automation targets
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml             # Automated CI/CD pipeline (tests, compose e2e, render deploy)
-│       └── promote-dev-to-prod.yml # Manual dev-to-production promotion & release workflow
+│       ├── ci.yml             # Automated CI pipeline (parallel tests, SAST, compose e2e)
+│       ├── cd.yml             # Automated CD pipeline (ECR build/push, deploy & serve, healthcheck)
+│       ├── promote-dev-to-prod.yml # Manual dev-to-production promotion & release workflow
+│       └── rollback.yml       # Dedicated rollback workflow (restores previous stable tag & serves)
 ├── render.yaml                # Render Blueprint declarative 1-click deployment
 ├── docker-compose.yaml        # Development multi-app composition
 ├── docker-compose.prod.yml    # Production multi-stage Caddy composition
@@ -387,6 +389,13 @@ The CI/CD pipeline decouples image creation from serving:
    - Discovers and pulls the currently deployed dev image from Amazon ECR.
    - Re-tags the verified dev image with the promotion timestamp tag (`YYYYMMDD-HHMMSS-shortsha`), semantic release tag (`vX.Y.Z`), and `prod-latest`.
    - Pushes promoted tags to ECR and deploys to production without building from source.
+
+4. **Automated & Manual Rollback Pipeline (`rollback.yml`)**:
+   - Safely rolls back `production` or `dev` to a previous known-good tag, specific image tag, release version, or commit SHA.
+   - Restores verified container images from ECR without rebuilding.
+   - Updates active pointers in AWS SSM Parameter Store (`/personal-lifecycle/${TARGET}/image_tag`) and records immutable audit log.
+   - Re-serves container stack, triggers Render rollback deploy, and verifies HTTP 200 health.
+
 
 regularly commit code to git
 

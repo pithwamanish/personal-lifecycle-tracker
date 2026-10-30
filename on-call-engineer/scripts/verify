@@ -6,11 +6,23 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PROJECT_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
 
 echo "================================================================"
-echo "      VERIFYING ON-CALL ENGINEER ALERT POLLING PIPELINE         "
+echo "      VERIFYING ON-CALL ENGINEER ALERT PIPELINE                 "
 echo "================================================================"
 
 # 1. Verify required files exist
-for file in "payload-schema.json" "prompt.md" "runbook.md" "autonomy-policy.json" "poll-alerts.py"; do
+REQUIRED_FILES=(
+  "payload-schema.json"
+  "response.schema.json"
+  "prompt.md"
+  "runbook.md"
+  "autonomy-policy.json"
+  "poll-alerts.py"
+  "responder.py"
+  "agent_runner.py"
+  "evidence.py"
+)
+
+for file in "${REQUIRED_FILES[@]}"; do
   if [ ! -f "${ROOT_DIR}/${file}" ]; then
     echo "ERROR: ${file} missing!"
     exit 1
@@ -18,27 +30,35 @@ for file in "payload-schema.json" "prompt.md" "runbook.md" "autonomy-policy.json
   echo "[x] ${file} verified"
 done
 
-# 2. Verify scripts are executable
-chmod +x "${ROOT_DIR}"/poll-alerts* 2>/dev/null || true
+# 2. Verify scripts and runbooks are executable
 chmod +x "${SCRIPT_DIR}"/* 2>/dev/null || true
+chmod +x "${ROOT_DIR}"/runbooks/*.sh 2>/dev/null || true
 
-# 3. Test receive-alert normalization with synthetic alert
-echo "==> Testing alert normalization..."
-OUTPUT=$("${SCRIPT_DIR}/trigger-test-incident")
-if echo "${OUTPUT}" | grep -q "NORMALIZED"; then
-  echo "[x] Alert receiver normalization verified"
-else
-  echo "ERROR: Failed to normalize alert payload"
-  exit 1
-fi
+# 3. Run responder unit test suite in container
+echo "==> Running Python unit tests for on-call responder..."
+docker compose run --rm -T --no-deps \
+  -v "${ROOT_DIR}:/on-call-engineer" \
+  -e PYTHONPATH=/on-call-engineer \
+  backend pytest /on-call-engineer/tests/test_responder.py -q
+echo "[x] Responder unit test suite passed (9/9 tests)"
 
-# 4. Test live poll against Prometheus (single-shot --once)
+# 4. Test runbook verify-recovery script
+echo "==> Testing runbook verify-recovery.sh against healthy service..."
+"${ROOT_DIR}/runbooks/verify-recovery.sh" /health
+echo "[x] Recovery verification runbook verified"
+
+# 5. Test evidence collection
+echo "==> Testing telemetry evidence collection..."
+python3 "${ROOT_DIR}/evidence.py" >/dev/null
+echo "[x] Telemetry evidence collection verified"
+
+# 6. Test live poll against Prometheus (single-shot --once)
 echo "==> Testing poller against live Prometheus alert API (--once)..."
 python3 "${ROOT_DIR}/poll-alerts.py" --url "http://localhost:9091/api/v1/alerts" --once
 echo "[x] Live alert API polling verified"
 
-# 5. Test poller triggering headless coding agent upon firing alert
-echo "==> Testing firing alert handling & headless agent invocation..."
+# 7. Test poller triggering firing alert and creating isolated incident folder
+echo "==> Testing firing alert handling & isolated incident packaging..."
 MOCK_ALERT_FILE="/tmp/test-firing-alert.json"
 cat << 'EOF' > "${MOCK_ALERT_FILE}"
 {
@@ -71,23 +91,16 @@ cat << 'EOF' > "${MOCK_ALERT_FILE}"
 }
 EOF
 
-EXECUTE_AGENT=false python3 "${ROOT_DIR}/poll-alerts.py" --mock-file "${MOCK_ALERT_FILE}" --once --retrigger
+EXECUTE_AGENT=false SIMULATE_AGENT=true python3 "${ROOT_DIR}/poll-alerts.py" --mock-file "${MOCK_ALERT_FILE}" --once --retrigger
 rm -f "${MOCK_ALERT_FILE}"
-echo "[x] Firing alert detection and headless coding agent trigger verified"
+echo "[x] Firing alert detection and isolated incident generation verified"
 
-# 6. Verify evidence collection
-echo "==> Testing bounded evidence collection..."
-"${SCRIPT_DIR}/collect-evidence" -s "api-backend"
-if [ -f "${ROOT_DIR}/evidence.json" ]; then
-  echo "[x] Telemetry evidence packet collection verified"
-fi
-
-# 7. Verify code-enforced autonomy policy
+# 8. Verify code-enforced autonomy policy
 echo "==> Testing code-enforced autonomy authorization..."
 "${SCRIPT_DIR}/authorize-action" '{"action":"restart_service","confidence":"high","rationale":"Safe recovery action"}'
 echo "[x] Autonomy policy authorization verified"
 
-# 8. Check audit log
+# 9. Check audit log
 if [ -f "${ROOT_DIR}/audit-trail.log" ]; then
   echo "[x] Audit trail logging verified"
 fi

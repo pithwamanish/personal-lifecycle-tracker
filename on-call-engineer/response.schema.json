@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "On-Call Incident Responder Agent Answer",
+  "description": "Standardized schema for the structured response block returned by the autonomous on-call coding agent.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "incident": {
+      "type": "string",
+      "description": "The unique incident identifier"
+    },
+    "root_cause": {
+      "type": "string",
+      "description": "One sentence describing the identified defect root cause, or n/a for test alerts"
+    },
+    "fix": {
+      "type": "string",
+      "description": "Files modified and summary of changes applied, or none"
+    },
+    "tests": {
+      "type": "string",
+      "description": "Test command executed and resulting test status, or not run"
+    },
+    "action": {
+      "type": "string",
+      "enum": ["none", "fixed", "escalate", "unknown"],
+      "description": "Remediation outcome action"
+    },
+    "summary": {
+      "type": "string",
+      "description": "One concise standalone sentence for on-call audit log"
+    },
+    "last_line": {
+      "type": "string",
+      "description": "The exact final SUMMARY line of the agent's answer"
+    }
+  },
+  "required": ["incident", "root_cause", "fix", "tests", "action", "summary", "last_line"]
+}

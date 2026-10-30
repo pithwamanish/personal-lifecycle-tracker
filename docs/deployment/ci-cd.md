@@ -1,6 +1,10 @@
-# CI/CD Pipeline & Automated Render Deployment Guide
+# CI/CD, Promotion & Rollback Deployment Guide
 
-This guide details the continuous integration and continuous deployment (CI/CD) pipeline for the **Personal Lifecycle Tracker** implemented via GitHub Actions ([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)).
+This guide details the continuous integration, continuous deployment, production promotion, and rollback workflows for the **Personal Lifecycle Tracker** implemented via separate modular GitHub Actions:
+- **CI Pipeline**: [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)
+- **CD Pipeline**: [`.github/workflows/cd.yml`](../../.github/workflows/cd.yml)
+- **Dev-to-Production Promotion**: [`.github/workflows/promote-dev-to-prod.yml`](../../.github/workflows/promote-dev-to-prod.yml)
+- **Rollback Deployment**: [`.github/workflows/rollback.yml`](../../.github/workflows/rollback.yml)
 
 ---
 
@@ -285,3 +289,56 @@ gh workflow run promote-dev-to-prod.yml \
   -f version_tag=v1.1.0 \
   -f release_title="Production Release v1.1.0 (Q4 Feature Milestone)"
 ```
+
+---
+
+## 8. Automated & Manual Rollback Workflow (`rollback.yml`)
+
+The repository includes a dedicated rollback and incident recovery workflow ([`.github/workflows/rollback.yml`](../../.github/workflows/rollback.yml)) designed to immediately restore previously verified stable container images to either `production` or `dev` environments without rebuilding from source.
+
+### A. Supported Rollback Modes
+| Rollback Mode | Description | Example Target Value |
+|---|---|---|
+| `previous_ssm_tag` (Default) | Automatically looks up the previous healthy tag from AWS SSM Parameter History (`/personal-lifecycle/${TARGET}/image_tag`) or ECR. | *(Leave blank)* |
+| `specific_image_tag` | Explicitly rolls back to a known deterministic image tag. | `20261029-120000-83242da` |
+| `git_release_tag` | Rolls back to a previous semantic release tag. | `v1.0.0` |
+| `git_commit_sha` | Rolls back to the container image corresponding to a git commit SHA. | `83242da` |
+
+### B. Rollback Execution Lifecycle
+1. **Safety Gate Confirmation**: Requires the operator to specify `confirm_rollback=YES` to prevent inadvertent rollbacks.
+2. **Keyless Cloud Authentication**: Authenticates with AWS STS via GitHub OIDC (`id-token: write`).
+3. **Registry Resolution & Re-tagging**: Pulls the restored container image from Amazon ECR, re-tags as `<target>-latest` and `latest`, and pushes to ECR.
+4. **Active Pointer Update**: Updates `/personal-lifecycle/${TARGET}/image_tag` in AWS SSM Parameter Store.
+5. **Zero-Host-Build Serving**: Serves the restored container stack via `docker compose -f docker-compose.prod.yml up -d --no-build`.
+6. **Live Health Polling**: Queries the healthcheck endpoint every 10s until HTTP 200 `status: healthy` is confirmed.
+7. **Immutable Audit Record**: Writes a permanent audit payload to AWS SSM (`/personal-lifecycle/${TARGET}/last_rollback`) containing timestamp, operator, environment, previous degraded tag, and restored tag.
+8. **On-Call Dispatch**: Dispatches incident status to the Autonomous On-Call Responder.
+
+### C. Triggering Rollback
+
+**Via GitHub Actions UI**:
+1. Navigate to **Actions** -> **Rollback Deployment**.
+2. Select `target_environment: production` (or `dev`).
+3. Select `rollback_mode: previous_ssm_tag` (or specify tag/version).
+4. Enter reason (e.g. `Incident INC-105: Memory leak detected in backend`).
+5. Confirm switch: `confirm_rollback: YES`.
+6. Click **Run workflow**.
+
+**Via GitHub CLI (`gh`)**:
+```bash
+# Roll back production to the previous known-good tag
+gh workflow run rollback.yml \
+  -f target_environment=production \
+  -f rollback_mode=previous_ssm_tag \
+  -f reason="Incident INC-105: High error rate in latest release" \
+  -f confirm_rollback=YES
+
+# Roll back dev to a specific release tag
+gh workflow run rollback.yml \
+  -f target_environment=dev \
+  -f rollback_mode=git_release_tag \
+  -f target_value=v1.0.0 \
+  -f reason="Feature test failed; restoring stable baseline" \
+  -f confirm_rollback=YES
+```
+

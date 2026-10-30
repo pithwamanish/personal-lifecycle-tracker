@@ -1,35 +1,45 @@
 # On-Call Engineer & Autonomous Incident Response (`on-call-engineer/`)
 
 This directory provides the automated alert monitoring and autonomous incident remediation pipeline for the **Personal Lifecycle Tracker** system.
+It combines push-based webhooks (FastAPI daemon on port 8001), continuous observability polling (Prometheus/Alertmanager API), sandboxed headless coding agent execution, and independent recovery verification.
 
 ---
 
 ## 1. Overview & Architecture
 
-The on-call system continuously polls the observability alerting API. When Prometheus or Alertmanager emits an active `firing` alert, the pipeline normalizes the payload, generates an incident prompt with telemetry context, and passes it to a headless coding agent.
-
 ```
-[Prometheus / Alertmanager] (:9091 /api/v1/alerts)
+[Prometheus / Grafana / Alertmanager]
            │
-           │ (every 60 seconds)
-           ▼
-[on-call-engineer/poll-alerts.py]
-           │
-     (State = firing?)
-           ├──► [Normalize to payload-schema.json]
-           ├──► [Archive incident to _docs/incidents/incident-<id>.json]
-           ├──► [Render agent prompt to _docs/incidents/prompt-<id>.md]
-           ▼
-[on-call-engineer/scripts/invoke-agent]
-           │
-           ├──► Headless AI Coding Agent (agy / claude -p / autonomous loop)
-           │      1. Collect bounded read-only evidence (scripts/collect-evidence)
-           │      2. Evaluate autonomy policy (scripts/authorize-action)
-           │      3. Reproduce bug with failing test inside Docker container
-           │      4. Apply minimal safe correction preserving contracts
-           │      5. Verify metric recovery and alert resolution
-           ▼
-[on-call-engineer/audit-trail.log]
+           ├──► [POST /alerts (FastAPI Webhook Server :8001)] (responder.py)
+           │                                 │
+           └──► [GET /api/v1/alerts (Every 60s)] (poll-alerts.py)
+                                             ▼
+                               [on-call-engineer/responder.py]
+                                             │
+             ┌───────────────────────────────┴───────────────────────────────┐
+             │ 1. Ingest Alert & Enforce Cooldown / Dedup                    │
+             │ 2. Telemetry Harvester: Prometheus + Loki + Tempo (evidence.py)│
+             │ 3. Create Isolated Incident Folder: incidents/<incident-id>/  │
+             │    ├── alert.json, payload.json, evidence.json, evidence.md   │
+             │    └── prompt.md (data-sandboxed prompt template)             │
+             │ 4. Run Sandboxed Agent Runner (agent_runner.py)               │
+             │    ├── claude -p --restricted --output-format stream-json     │
+             │    ├── --tools Read,Grep,Glob,Edit,Bash                       │
+             │    ├── --allowedTools Edit(./backend/app/**)...               │
+             │    ├── --disallowedTools Bash(git commit:*),Bash(git push:*)  │
+             │    └── Stream JSON lines -> transcript.jsonl                  │
+             │ 5. Parse Structured Answer (response.schema.json)             │
+             │    └── answer.json                                            │
+             │ 6. Automated Redeploy & Self-Verification Loop                │
+             │    ├── Rebuild Container: runbooks/redeploy.sh                │
+             │    ├── Verify Endpoints: runbooks/verify-recovery.sh          │
+             │    ├── If pass: status -> 'recovered'                         │
+             │    └── If fail: status -> 'escalated' (never trust agent claim)│
+             └───────────────────────────────────────────────────────────────┘
+                                             │
+                                             ▼
+                               [Audit & Deliverables]
+                    incidents/<incident-id>/ (10 standardized files)
 ```
 
 ---
@@ -38,186 +48,124 @@ The on-call system continuously polls the observability alerting API. When Prome
 
 ```text
 on-call-engineer/
-├── poll-alerts.py          # Primary polling script (default: polls every 60s)
-├── poll-alerts             # Executable bash wrapper
-├── payload-schema.json     # JSON schema for normalized incident payloads
-├── autonomy-policy.json    # Code-enforced autonomy permission levels
-├── prompt.md               # Context-injected prompt template for headless agent
-├── runbook.md              # Alert-specific triage runbook
-├── audit-trail.log         # Timestamped audit log of all polling & agent actions
-├── evidence.json           # Read-only bounded evidence packet (generated on incident)
+├── responder.py              # FastAPI webhook responder daemon (port 8001) with serialization queue
+├── agent_runner.py           # Sandboxed Claude Code CLI runner (budget caps, path restrictions, stream-json)
+├── evidence.py               # Read-only telemetry harvester (Prometheus 9091, Loki 3101, Tempo 3201)
+├── poll-alerts.py            # Continuous polling daemon for Prometheus alerts & CI/CD failures
+├── payload-schema.json       # JSON schema for incoming normalized alerts
+├── response.schema.json      # JSON schema for agent answers (INCIDENT, ROOT_CAUSE, FIX, TESTS, ACTION, SUMMARY)
+├── autonomy-policy.json      # Code-enforced autonomy permission levels (Level 1, Level 2, Level 3)
+├── prompt.md                 # Context-injected prompt template enforcing safety & response contracts
+├── runbook.md                # Alert-specific triage runbook
+├── audit-trail.log           # Timestamped audit log of all incident transitions & agent actions
+├── runbooks/
+│   ├── redeploy.sh           # Rebuilds and restarts backend container with --wait
+│   └── verify-recovery.sh    # Re-curls target endpoints; fails on 5xx or connection drops
 ├── scripts/
-│   ├── poll-alerts         # Script entrypoint for polling
-│   ├── invoke-agent        # Dispatches headless coding agent with incident context
-│   ├── receive-alert       # Standalone receiver for webhooks or stdin JSON
-│   ├── collect-evidence    # Read-only telemetry harvester (Prometheus, Loki, git)
-│   ├── authorize-action    # Code-enforced policy evaluator outside the model
+│   ├── poll-alerts           # Executable wrapper for poll-alerts.py
+│   ├── invoke-agent          # CLI entrypoint for sandboxed agent dispatch
+│   ├── receive-alert         # Standalone receiver for webhook payloads or stdin
+│   ├── collect-evidence      # CLI wrapper for telemetry evidence collection
+│   ├── authorize-action      # Code-enforced policy evaluator outside the model
+│   ├── run-real-incident-drill # End-to-end defect injection & verified recovery drill
+│   ├── run-code-fix-drill    # Level 2 code fix & human approval drill
+│   ├── run-aws-incident-drill # Cloud simulator incident drill
 │   ├── trigger-test-incident # Synthetic alert trigger for drill verification
-│   └── verify              # Deterministic test script proving the pipeline
-└── README.md               # This documentation file
+│   └── verify                # Comprehensive validation suite (tests + runbooks + drills)
+├── tests/
+│   └── test_responder.py     # Pytest unit test suite covering full responder lifecycle
+├── incidents/                # Dedicated per-incident audit directories (<id>/)
+│   └── <incident-id>/        # 10 isolated incident artifacts
+│       ├── alert.json        # Raw incoming alert payload
+│       ├── payload.json      # Complete webhook payload
+│       ├── evidence.json     # Telemetry metrics and error logs in JSON
+│       ├── evidence.md       # Rendered markdown evidence
+│       ├── prompt.md         # Context prompt delivered to agent
+│       ├── transcript.jsonl  # Claude Code stream-json execution log
+│       ├── response.md       # Raw answer text from agent
+│       ├── answer.json       # Parsed fields conforming to response.schema.json
+│       ├── redeploy.json     # Output of container rebuild
+│       ├── verification.json # Output of endpoint verification check
+│       └── incident.json     # Complete lifecycle timeline and status transitions
+└── README.md                 # This documentation file
 ```
 
 ---
 
-## 3. How to Run the Alert Poller
+## 3. How to Run the Incident Responder
 
-### Continuous Polling (Default: Every 1 Minute)
+### A. Run Webhook Daemon (`responder.py`)
+Listens on port `8001` (restricted to loopback and Docker bridge networks):
 ```bash
-# Using Python directly
-python3 on-call-engineer/poll-alerts.py
+# Using Makefile
+make on-call-responder
 
-# Using the bash wrapper
-./on-call-engineer/poll-alerts
+# Direct Python invocation
+python3 on-call-engineer/responder.py
+```
 
+### B. Run Continuous Observability Poller (`poll-alerts.py`)
+Polls Prometheus Alert API every 60s and watches GitHub Actions CI/CD runs:
+```bash
 # Using Makefile
 make on-call-poll
+
+# Direct Python invocation
+python3 on-call-engineer/poll-alerts.py
 ```
 
-### CLI Options
-| Flag | Description | Default |
-|---|---|---|
-| `--interval <sec>` | Polling frequency in seconds | `60` (1 minute) |
-| `--url <url>` | Target Alert API endpoint | `http://localhost:9091/api/v1/alerts` |
-| `--once` | Run a single poll cycle and exit immediately | `false` |
-| `--mock-file <path>` | Read alerts from local JSON file (for drills/tests) | `None` |
-| `--agent-cmd <cmd>` | Custom command/script to invoke the headless agent | `on-call-engineer/scripts/invoke-agent` |
-| `--retrigger` | Re-dispatch agent on every poll even if alert was already handled | `false` (stateful deduplication) |
-| `--verbose`, `-v` | Enable debug logging | `false` |
-
-### Environment Variables
-- `ALERT_API_URL` or `PROMETHEUS_URL`: Override default Prometheus endpoint (default: `http://localhost:9091/api/v1/alerts`).
-- `ALERT_POLL_INTERVAL` or `POLL_INTERVAL`: Override default polling interval (default: `60`).
-
-### Automated CI/CD Failure Detection (Dual-Channel)
-The on-call system ingests CI/CD failures via two automated mechanisms without manual human intervention:
-1. **Pull-Based (Continuous Poller)**: `poll-alerts.py` automatically queries GitHub Actions runs via `gh` CLI in every 60s cycle. When a workflow run fails on active branches, it generates `_docs/incidents/incident-<id>.json` and dispatches the agent immediately.
-2. **Push-Based (Real-Time in CI)**: `.github/workflows/ci.yml` contains a dedicated `notify-on-call` job (`if: failure()`). Whenever ANY job in the workflow fails, it runs automatically and feeds the incident payload directly into `on-call-engineer/scripts/receive-alert`.
-
----
-
-## 4. Headless Coding Agent Dispatch
-
-When an alert enters the `firing` state (from either Prometheus or GitHub Actions CI/CD):
-1. **Normalization**: The raw alert labels and annotations are extracted and structured according to [`payload-schema.json`](payload-schema.json).
-2. **Persistence**:
-   - Incident data: `_docs/incidents/incident-<timestamp>-<alert_name>.json`
-   - Rendered prompt: `_docs/incidents/prompt-<timestamp>-<alert_name>.md`
-3. **Agent Invocation** (`scripts/invoke-agent`):
-   - **Antigravity CLI**: If `agy` is installed, runs `agy --prompt "$(cat prompt.md)"`.
-   - **Claude Code**: If `claude` is installed, runs `claude -p "$(cat prompt.md)"`.
-   - **Autonomous Headless Responder**: If running headless in container/CI, runs the autonomous triage loop: gathers evidence via `collect-evidence`, verifies against `authorize-action`, logs the session, and prepares a repro test.
-4. **Resolution Tracking**: When the alert recovers and is no longer returned as firing (or when the subsequent CI run passes), the poller logs `ALERT_RESOLVED` and clears the alert fingerprint.
-
----
-
-## 5. Verification & Testing
-
-Execute the automated end-to-end verification script:
+### C. Run Unit Test Suite
+Executes all 9 automated unit tests inside the containerized backend:
 ```bash
-bash on-call-engineer/scripts/verify
-
-# Or via Makefile
-make on-call-verify
+make on-call-test
 ```
 
-The verification script confirms:
-- All required schemas, policies, and runbooks exist.
-- Alert normalization operates correctly.
-- Live Prometheus alert API is queried successfully (`--once`).
-- Mock firing alerts trigger incident generation and headless agent dispatch.
-- Read-only evidence collection and code-enforced autonomy policy checks succeed.
-
----
-
-## 6. Local Cloud Production Simulation (SNS -> Lambda -> ECS/Fargate -> S3 & CloudWatch)
-
-We emulate the full AWS enterprise serverless incident response architecture locally using containerized emulators without cloud spend:
-
-```
-[Prometheus / Alertmanager]
-          │ (Alert Fires)
-          ▼
-[Amazon SNS / EventBridge] (Floci S3/SNS Topic)
-          │
-          │ (SNS Event Notification)
-          ▼
-[AWS Lambda Dispatcher] (cloud-simulator/lambda/dispatcher.py)
-          │
-          │ (Runs ephemeral task via ECS run_task)
-          ▼
-[AWS ECS / Fargate Ephemeral Container] (cloud-simulator/fargate-task/task-runner.sh --rm)
-          │
-          ├──► Headless AI Coding Agent: Gathers telemetry evidence
-          ├──► Evaluates code-enforced autonomy policy
-          ├──► Generates root-cause reproduction & minimal git diff patch
-          ├──► Emits live logs to CloudWatch Log Stream
-          │
-          ▼
-[Audit & Archival]
-   ├──► Archives deliverables to Amazon S3: `s3://lifecycle-on-call-incidents/<incident-id>/`
-   │      - `incident.json` (normalized alert payload)
-   │      - `prompt.md` (agent context prompt)
-   │      - `evidence.json` (bounded telemetry packet)
-   │      - `diff.patch` (minimal code correction)
-   │      - `transcript.log` (complete execution audit trail)
-   └──► Ephemeral compute container terminates and destroys immediately (`--rm`)
-```
-
-### Running the Cloud Simulation
+### D. Run End-to-End Real Incident Drill
+Injects a live HTTP 500 defect, harvests telemetry, executes sandboxed repair, verifies container redeployment, and confirms recovery:
 ```bash
-# Using Makefile
-make on-call-simulate-cloud
-
-# Or direct bash script
-bash on-call-engineer/cloud-simulator/scripts/run-cloud-simulation
+make on-call-real-drill
+# or: bash on-call-engineer/scripts/run-real-incident-drill
 ```
 
 ---
 
-## 7. Live AWS Serverless On-Call Responder (SNS -> Lambda)
+## 4. Key Additions & Architectural Hardening
 
-For production deployments on AWS, the responder deploys as a native serverless Lambda function (`on-call-engineer/lambda_handler.py`) integrated with Amazon SNS and CloudWatch Alarms:
+1. **Fine-Grained Agent Sandboxing (`agent_runner.py`)**:
+   - Executes `claude` with:
+     - `--restricted`: Starts session with zero tools, ignoring ambient host configs.
+     - `--permission-mode dontAsk --permission-prompts none`: Denies unallowlisted commands without hanging.
+     - `--max-budget-usd 2`: Hard spend cap per incident.
+     - `--allowedTools`:
+       `Edit(./backend/app/**)`, `Edit(./backend/tests/**)`, `Bash(docker compose run --rm -T --no-deps backend pytest:*)`, `Bash(on-call-engineer/runbooks/redeploy.sh)`, `Bash(on-call-engineer/runbooks/verify-recovery.sh:*)`, `Bash(git status:*)`, `Bash(git diff:*)`, `Bash(git log:*)`.
+     - `--disallowedTools`:
+       `Bash(git commit:*)`, `Bash(git push:*)`, `Bash(git reset:*)`, `Bash(git checkout:*)`, `Bash(docker compose down:*)`, `Bash(rm -rf:*)`.
+   - Streams JSON output line-by-line into `transcript.jsonl`, tracking turns, token cost in USD, and permission denials.
 
-```
-[CloudWatch Alarm / EventBridge]
-           │
-           │ (Alarm Firing Notification)
-           ▼
-[Amazon SNS Alert Topic]
-           │
-           │ (Event Notification)
-           ▼
-[AWS Lambda Responder] (on-call-engineer/lambda_handler.py)
-           │
-           ├──► Normalizes incoming alert payload
-           ├──► Evaluates Autonomy Policy outside the model:
-           │      - LEVEL_1_AUTO_EXECUTE: Autonomous operational remediation (rollback, restart)
-           │      - LEVEL_2_HUMAN_APPROVAL: Pauses execution, emits patch diff, awaits operator sign-off
-           │      - LEVEL_3_ESCALATE: Hard escalation to human engineer
-           ├──► Verifies service health endpoint
-           └──► Emits timestamped audit log to CloudWatch Logs
-```
+2. **Automated Post-Fix Redeploy & Self-Verification**:
+   - The agent is never permitted to mark an incident resolved on faith.
+   - When the agent returns `ACTION: fixed`:
+     1. Responder executes [`runbooks/redeploy.sh`](runbooks/redeploy.sh) (`docker compose up --build -d --wait --no-deps backend`).
+     2. Responder executes [`runbooks/verify-recovery.sh`](runbooks/verify-recovery.sh) against all failing routes.
+     3. Only if `verify-recovery.sh` exits 0 with HTTP 200/2xx does the incident transition to `recovered`.
+     4. If verification or rebuild fails, the incident immediately escalates to a human engineer (`escalated`).
 
-### Running the Live AWS Level 1 Drill
-```bash
-make on-call-aws-drill
-# or: bash on-call-engineer/scripts/run-aws-incident-drill
-```
+3. **Per-Incident Directory Isolation (`incidents/<id>/`)**:
+   - Replaced overwriting single shared files with dedicated incident directories containing 10 explicit artifacts:
+     `alert.json`, `evidence.json`, `evidence.md`, `prompt.md`, `transcript.jsonl`, `response.md`, `answer.json`, `redeploy.json`, `verification.json`, `incident.json`.
 
----
+4. **Standardized Response Contract (`response.schema.json`)**:
+   - Enforces machine-parseable answer format:
+     ```text
+     INCIDENT: {incident_id}
+     ROOT_CAUSE: <one sentence description>
+     FIX: <files and changes applied>
+     TESTS: <test command executed and status>
+     ACTION: none | fixed | escalate
+     SUMMARY: <concise audit log message>
+     ```
 
-## 8. Level 2 Code-Fix, Human Approval Gate & Automated Git Push Drill
-
-When an incident is caused by a real code defect rather than an operational blip, the responder executes the Level 2 workflow:
-
-1. **Failure Reproduction**: Runs a reproduction test proving the failure before touching any code.
-2. **Autonomy Policy Enforcement (Without Approval)**: If `human_approval=false`, the responder **halts immediately** (`PAUSED_FOR_HUMAN_APPROVAL`, HTTP 202) and emits the proposed patch diff for human review.
-3. **Operator Sign-Off**: Once the operator reviews the proposed diff and approves (`human_approval=true`), the responder applies the minimal patch.
-4. **Test Verification**: Executes the reproduction test (verifying HTTP 201 Created) and the complete backend test suite.
-5. **Security Gate & Git Audit Trail**: Triggers pre-commit Semgrep SAST scan (0 findings required) and commits the verified fix to Git with incident audit references.
-
-### Running the Level 2 Code-Fix Drill
-```bash
-make on-call-code-fix-drill
-# or: bash on-call-engineer/scripts/run-code-fix-drill
-```
+5. **Pruning & Cleanup**:
+   - Removed redundant root bash wrapper `poll-alerts` (consolidated into `scripts/poll-alerts`).
+   - Removed deceptive synthetic fake proposal fallback in `invoke-agent`.
+   - Removed root-level `evidence.json` overwrite to guarantee state isolation.

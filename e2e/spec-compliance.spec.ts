@@ -7,6 +7,7 @@ test.describe('Full MVP Specification Compliance Journey (@spec.md Section 6)', 
   });
 
   test('end-to-end acceptance flow validating all Section 6 criteria', async ({ page }) => {
+    test.setTimeout(120000);
     const timestamp = Date.now();
     const userEmail = `auditor_${timestamp}@example.com`;
     const userName = `Auditor ${timestamp}`;

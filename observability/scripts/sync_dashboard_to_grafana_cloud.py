@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 import json
 import os
+import sys
 import urllib.request
 
-GRAFANA_URL = "https://<your-org>.grafana.net"
-TOKEN = "REDACTED_GRAFANA_SERVICE_ACCOUNT_TOKEN"
-PROM_UID = "grafanacloud-prom"
+GRAFANA_URL = os.getenv("GRAFANA_URL", "").rstrip("/")
+TOKEN = os.getenv("GRAFANA_SERVICE_ACCOUNT_TOKEN", os.getenv("GRAFANA_TOKEN", "")).strip()
+PROM_UID = os.getenv("GRAFANA_PROM_UID", "grafanacloud-prom").strip()
+
+if not GRAFANA_URL or not TOKEN:
+    print("Error: Missing required environment variables.", file=sys.stderr)
+    print("Please set GRAFANA_URL and GRAFANA_SERVICE_ACCOUNT_TOKEN (or GRAFANA_TOKEN).", file=sys.stderr)
+    print("Example: GRAFANA_URL='https://<your-org>.grafana.net' GRAFANA_SERVICE_ACCOUNT_TOKEN='glsa_...' python3 sync_dashboard_to_grafana_cloud.py", file=sys.stderr)
+    sys.exit(1)
 
 dashboard_file = os.path.join(
     os.path.dirname(__file__), "..", "grafana", "dashboards", "lifecycle-tracker-overview.json"

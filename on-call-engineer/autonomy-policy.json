@@ -14,7 +14,8 @@
       "autonomy_level": "LEVEL_1_AUTO_EXECUTE",
       "allowed_commands": [
         "docker compose -f docker-compose.prod.yml up -d --no-build",
-        "git checkout HEAD~1"
+        "git checkout HEAD~1",
+        "gh workflow run rollback.yml -f confirm_rollback=YES"
       ],
       "reversible": true,
       "max_executions_per_incident": 1
@@ -52,7 +53,11 @@
       "autonomy_level": "LEVEL_2_HUMAN_APPROVAL",
       "allowed_commands": [
         "act -n -W .github/workflows/ci.yml",
-        "make ci-validate"
+        "act -n -W .github/workflows/cd.yml",
+        "act -n -W .github/workflows/rollback.yml",
+        "make ci-validate",
+        "make cd-validate",
+        "make rollback-validate"
       ],
       "requires_human_confirmation": true
     },

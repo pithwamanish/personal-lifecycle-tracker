@@ -1,0 +1,23 @@
+{
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "UnhandledZeroDivisionError",
+        "severity": "critical",
+        "service": "api-backend",
+        "environment": "development",
+        "version": "dev-latest",
+        "route": "/api/v1/items/drill-check"
+      },
+      "annotations": {
+        "summary": "Unhandled ZeroDivisionError in items drill-check endpoint",
+        "description": "5xx error rate spiked on /api/v1/items/drill-check; endpoint throwing unhandled exception",
+        "observed_value": "500",
+        "threshold": "1",
+        "dashboard_url": "http://localhost:3004/d/lifecycle-tracker-overview",
+        "runbook_url": "on-call-engineer/runbook.md#highhttperrorrate"
+      }
+    }
+  ]
+}

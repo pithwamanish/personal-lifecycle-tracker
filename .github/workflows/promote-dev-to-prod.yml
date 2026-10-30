@@ -648,3 +648,41 @@ jobs:
             exit 1
           fi
 
+  # ===========================================================================
+  # 4. ON-CALL AUTONOMOUS INCIDENT DISPATCH (Fires on ANY promotion failure)
+  # ===========================================================================
+  notify-on-call:
+    name: Notify On-Call Responder on Failure
+    if: failure()
+    needs: [validate-and-test, promote-and-tag, promote-images-and-deploy-prod]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dispatch Incident Payload to On-Call Responder
+        env:
+          WORKFLOW_NAME: ${{ github.workflow }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          HEAD_BRANCH: ${{ github.ref_name }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          echo "================================================================"
+          echo " DISPATCHING AUTOMATED ON-CALL INCIDENT EVENT FOR PROMOTION FAILURE "
+          echo "================================================================"
+          python3 on-call-engineer/scripts/receive-alert <<EOF
+          {
+            "workflow_run": {
+              "id": $RUN_ID,
+              "name": "$WORKFLOW_NAME",
+              "conclusion": "failure",
+              "head_branch": "$HEAD_BRANCH",
+              "head_sha": "$HEAD_SHA",
+              "html_url": "$RUN_URL",
+              "updated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            }
+          }
+          EOF
+
+

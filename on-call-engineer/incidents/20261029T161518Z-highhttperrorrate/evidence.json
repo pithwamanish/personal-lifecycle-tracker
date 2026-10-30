@@ -1,0 +1,26 @@
+{
+  "service_name": "api-backend",
+  "window": {
+    "start": "2026-10-29T16:00:18.828354+00:00",
+    "end": "2026-10-29T16:15:18.828354+00:00"
+  },
+  "requests_by_status": {
+    "200": 182.03,
+    "201": 0.0,
+    "400": 0.0,
+    "403": 0.0,
+    "401": 0.0,
+    "204": 0.0,
+    "404": 0.0
+  },
+  "failing_routes": [],
+  "error_logs": [],
+  "error_trace_ids": [],
+  "container_status": "personal-lifecycle-tracker-backend: Up 57 seconds (healthy) | personal-lifecycle-tracker-frontend: Up 12 days (healthy) | personal-lifecycle-cloud-emulator: Up 12 days (unhealthy) | personal-lifecycle-otel-collector: Up 12 days | personal-lifecycle-prometheus: Up 12 days | personal-lifecycle-grafana: Up 12 days | personal-lifecycle-loki: Up 12 days | personal-lifecycle-tempo: Up 12 days | personal-lifecycle-tracker-db: Up 12 days (healthy)",
+  "recent_commits": [
+    "c4e3a22: docs: update live AWS CloudFront & Lambda URLs, reviewer demo guide, and verification endpoints for rubric criterion 8",
+    "01c0514: fix(deps): add psycopg[binary] for SQLAlchemy 2.0 PostgreSQL dialect compatibility [CI-FIX]",
+    "caa0d35: fix: resolve security, data protection, telemetry PII and documentation findings from audit"
+  ],
+  "collection_errors": []
+}

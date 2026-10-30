@@ -37,7 +37,9 @@ setup-hooks:
 	@mkdir -p .git/hooks
 	@cp scripts/pre-commit-security.sh .git/hooks/pre-commit
 	@chmod +x .git/hooks/pre-commit
-	@echo "Git security pre-commit hook installed successfully."
+	@cp scripts/pre-push-security.sh .git/hooks/pre-push
+	@chmod +x .git/hooks/pre-push
+	@echo "Git security pre-commit and pre-push hooks installed successfully."
 
 ps:
 	docker compose ps
@@ -229,12 +231,24 @@ cf-status-prod:
 ci-validate:
 	act -n -W .github/workflows/ci.yml
 
+cd-validate:
+	act -n -W .github/workflows/cd.yml
+
 promote-validate:
 	act -n -W .github/workflows/promote-dev-to-prod.yml
+
+rollback-validate:
+	act -n -W .github/workflows/rollback.yml
 
 # On-Call Engineer & Autonomous Incident Response
 on-call-poll:
 	python3 on-call-engineer/poll-alerts.py
+
+on-call-responder:
+	python3 on-call-engineer/responder.py
+
+on-call-test:
+	docker compose run --rm -T --no-deps -v "$$PWD/on-call-engineer:/on-call-engineer" -e PYTHONPATH=/on-call-engineer backend pytest /on-call-engineer/tests/test_responder.py -v
 
 on-call-verify:
 	bash on-call-engineer/scripts/verify
@@ -247,6 +261,9 @@ on-call-aws-drill:
 
 on-call-code-fix-drill:
 	bash on-call-engineer/scripts/run-code-fix-drill
+
+on-call-real-drill:
+	bash on-call-engineer/scripts/run-real-incident-drill
 
 # Local Kubernetes Deployment with Kind
 KIND_CLUSTER_NAME ?= lifecycle-cluster
