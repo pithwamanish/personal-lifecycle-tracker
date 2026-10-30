@@ -1,14 +1,20 @@
 import { test, expect } from '@playwright/test';
 
+let isLiveAwsHealthy = false;
+
 test.beforeAll(async () => {
-  // Pre-warm CloudFront edge cache and AWS Lambda backend to avoid initial cold-start latency penalties
+  // Pre-warm CloudFront edge cache and verify live AWS Lambda backend availability
   try {
-    await Promise.allSettled([
-      fetch('https://d1ca9upoitnq9b.cloudfront.net/', { signal: AbortSignal.timeout(5000) }),
-      fetch('https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health', { signal: AbortSignal.timeout(5000) }),
+    const [res] = await Promise.all([
+      fetch('https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws/health', { signal: AbortSignal.timeout(6000) }),
+      fetch('https://d1ca9upoitnq9b.cloudfront.net/', { signal: AbortSignal.timeout(6000) }).catch(() => null),
     ]);
+    if (res && res.ok) {
+      const data = await res.json();
+      isLiveAwsHealthy = data.status === 'healthy' && data.database === 'connected';
+    }
   } catch {
-    // Ignore warm-up network errors if offline
+    isLiveAwsHealthy = false;
   }
 });
 
@@ -31,6 +37,7 @@ test('benchmark page load time in browser', async ({ page }) => {
 });
 
 test('benchmark page load time on CloudFront directly', async ({ page }) => {
+  test.skip(!isLiveAwsHealthy, 'Live AWS deployment is unreachable or database is disconnected');
   const start = Date.now();
   const reqTimes = new Map<string, number>();
   page.on('console', msg => console.log(`[Browser Console +${Date.now() - start}ms] ${msg.type()}: ${msg.text()}`));
@@ -60,6 +67,7 @@ test('benchmark page load time on CloudFront directly', async ({ page }) => {
 });
 
 test('benchmark page load time on CloudFront with authenticated session', async ({ page }) => {
+  test.skip(!isLiveAwsHealthy, 'Live AWS deployment is unreachable or database is disconnected');
   const start = Date.now();
   await page.addInitScript(() => {
     localStorage.setItem('plt_auth_token_v1', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyX2FsZXgiLCJlbWFpbCI6ImFsZXhAZXhhbXBsZS5jb20iLCJleHAiOjE3OTI1NzA5ODl9.kVuQPUqhiFd3Ea3ijJk9mNWSQmGav4UK6JWm0dz3fok');
@@ -100,6 +108,7 @@ test('benchmark page load time on localhost:3003 in browser', async ({ page }) =
 });
 
 test('benchmark page load time in browser with live AWS Lambda backend', async ({ page }) => {
+  test.skip(!isLiveAwsHealthy, 'Live AWS deployment is unreachable or database is disconnected');
   const awsUrl = 'https://7ksomsylvke2uawuhhccbfr6hy0agzyb.lambda-url.ap-south-1.on.aws';
 
   await page.route('**/api/v1/**', async (route) => {
