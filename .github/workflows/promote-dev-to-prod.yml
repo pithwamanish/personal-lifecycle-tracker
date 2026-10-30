@@ -357,6 +357,7 @@ jobs:
       # Keyless Cloud Authentication (GitHub OIDC -> AWS STS)
       - name: Authenticate via GitHub OIDC Role
         id: oidc-auth
+        if: ${{ secrets.RENDER_OIDC_ROLE_ARN != '' || secrets.AWS_ROLE_TO_ASSUME != '' }}
         continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v4
         with:

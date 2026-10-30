@@ -115,6 +115,7 @@ jobs:
       # Assume IAM Role using GitHub OIDC (Keyless Cloud Authentication)
       - name: Authenticate via GitHub OIDC Role
         id: oidc-auth
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' || secrets.RENDER_OIDC_ROLE_ARN != '' }}
         continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -240,6 +241,7 @@ jobs:
 
       - name: Authenticate via GitHub OIDC Role
         id: oidc-auth
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' || secrets.RENDER_OIDC_ROLE_ARN != '' }}
         continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v4
         with:
